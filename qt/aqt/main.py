@@ -97,6 +97,15 @@ from aqt.webview import AnkiWebView, AnkiWebViewKind
 
 install_pylib_legacy()
 
+
+def _add_gre_dashboard_menu() -> None:
+    from aqt.gre_dashboard import setup_gre_dashboard_menu
+
+    setup_gre_dashboard_menu(aqt.mw)
+
+
+gui_hooks.main_window_did_init.append(_add_gre_dashboard_menu)
+
 MainWindowState = Literal[
     "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
 ]
