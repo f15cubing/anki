@@ -165,8 +165,12 @@ mod tests {
         note.set_field(1, "a").unwrap();
         col.add_note(&mut note, DeckId(1)).unwrap();
 
-        let undo_before = col.undo_status().last_step;
         let card_count_before = col.storage.get_all_cards().len();
+        // Build the study queue first so the undo baseline below already reflects
+        // queue construction, and capture the due/new/review counts the spec (§4)
+        // requires a read to leave byte-identical.
+        let counts_before = col.counts();
+        let undo_before = col.undo_status().last_step;
 
         let res = col
             .mastery_for_topics(&["topic::calculus".to_string()])
@@ -175,11 +179,17 @@ mod tests {
         // brand-new card, no FSRS memory state yet
         assert_eq!(res.topics[0].reviewed_count, 0);
 
-        // read-only: no new undo step, nothing added/removed, no corruption.
+        // read-only: no new undo step, study-queue counts unchanged, nothing
+        // added/removed, no corruption.
         assert_eq!(
             col.undo_status().last_step,
             undo_before,
             "must not create an undo step"
+        );
+        assert_eq!(
+            col.counts(),
+            counts_before,
+            "study queue (new/learning/review) counts must be unchanged"
         );
         assert_eq!(col.storage.get_all_cards().len(), card_count_before);
         assert!(
