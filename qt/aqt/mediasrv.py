@@ -396,6 +396,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-csv",
         "import-page",
         "image-occlusion",
+        "gre-dashboard",
     ]
 
 
@@ -672,6 +673,23 @@ def save_custom_colours() -> bytes:
     return b""
 
 
+def gre_dashboard_data() -> bytes:
+    # Read-only: calls the W1 MasteryQuery read RPC and returns a computed
+    # view-model as JSON. No mutation, no OpChanges (see dashboard_data).
+    import json
+    from datetime import datetime, timezone
+
+    from aqt.gre import dashboard_data as dd
+
+    topics = dd.query_topics()
+    rows = aqt.mw.col.mastery_query(topics)
+    rows_by_tag = {r.topic: r for r in rows}
+    vm = dd.build_view_model(
+        rows_by_tag, generated_at=datetime.now(timezone.utc).isoformat()
+    )
+    return json.dumps(vm).encode("utf-8")
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -688,6 +706,7 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
+    gre_dashboard_data,
 ]
 
 
