@@ -100,3 +100,79 @@ def headline(bucket_points: list[dict], z: float = 1.96) -> dict | None:
         "buckets_reflected": len(present),
         "buckets_total": len(bucket_points),
     }
+
+
+def _memory_cell(row) -> dict:
+    point, low, high = wilson_interval(row.mastered_count, row.reviewed_count)
+    return {
+        "point": point, "low": low, "high": high,
+        "reviewed": row.reviewed_count, "total": row.total_cards,
+        "mean_r": row.avg_recall,
+    }
+
+
+def next_best_topic(rows_by_tag: dict, tax: Taxonomy) -> str | None:
+    leaves = [(b, leaf, leaf_tag(b.name, leaf, tax)) for b in tax.buckets for leaf in b.leaves]
+    # 1) highest exam-weight uncovered leaf; ties -> taxonomy order
+    uncovered = [(b, tag) for (b, _leaf, tag) in leaves if rows_by_tag[tag].reviewed_count == 0]
+    if uncovered:
+        uncovered.sort(key=lambda bt: -bt[0].weight)  # stable -> preserves taxonomy order in ties
+        return uncovered[0][1]
+    # 2) all studied -> lowest memory lower-bound; ties -> taxonomy order
+    best_tag, best_low = None, 2.0
+    for (_b, _leaf, tag) in leaves:
+        _, low, _ = wilson_interval(rows_by_tag[tag].mastered_count, rows_by_tag[tag].reviewed_count)
+        if low < best_low:
+            best_low, best_tag = low, tag
+    return best_tag
+
+
+def build_view_model(rows_by_tag: dict, *, generated_at: str) -> dict:
+    tax = load_taxonomy()
+    # buckets
+    bucket_vms, bucket_points = [], []
+    for b in tax.buckets:
+        row = rows_by_tag[bucket_tag(b.name, tax)]
+        cell = _memory_cell(row)
+        bucket_points.append({"weight": b.weight, "point": cell["point"], "reviewed": row.reviewed_count})
+        bucket_vms.append({"bucket": b.name, "weight": b.weight, **cell})
+    # leaves + coverage
+    leaf_vms, deck, studied = [], 0, 0
+    for b in tax.buckets:
+        for leaf in b.leaves:
+            tag = leaf_tag(b.name, leaf, tax)
+            row = rows_by_tag[tag]
+            if row.total_cards > 0:
+                deck += 1
+            if row.reviewed_count > 0:
+                studied += 1
+            leaf_vms.append({
+                "tag": tag, "bucket": b.name, "leaf": leaf,
+                "has_cards": row.total_cards > 0,
+                "studied": row.reviewed_count > 0,
+                "memory": _memory_cell(row) if row.reviewed_count > 0 else None,
+            })
+    n_leaves = len(leaf_vms)
+    studied_pct = studied / n_leaves if n_leaves else 0.0
+    reasons = []
+    if studied_pct < 0.50:
+        reasons.append("<50% studied coverage")
+    total_reviewed = sum(rows_by_tag[bucket_tag(b.name, tax)].reviewed_count for b in tax.buckets)
+    if total_reviewed < 200:
+        reasons.append("<200 graded reviews")
+    return {
+        "generated_at": generated_at,
+        "memory": {"headline": headline(bucket_points), "buckets": bucket_vms},
+        "coverage": {
+            "deck_pct": deck / n_leaves if n_leaves else 0.0,
+            "studied_pct": studied_pct,
+            "leaves": leaf_vms,
+        },
+        "readiness": {
+            "state": "insufficient_evidence",
+            "studied_pct": studied_pct,
+            "next_best_topic": next_best_topic(rows_by_tag, tax),
+            "reasons": reasons,
+        },
+        "performance": {"state": "not_available", "note": "Arrives Thursday (MCQ surface)."},
+    }

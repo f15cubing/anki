@@ -51,3 +51,53 @@ def test_headline_reweights_when_a_bucket_has_no_reviews():
     assert out["buckets_reflected"] == 2
     assert out["buckets_total"] == 3
     assert 0.0 <= out["low"] <= out["point"] <= out["high"] <= 1.0
+
+
+from dataclasses import dataclass as _dc
+
+
+@_dc
+class FakeRow:
+    total_cards: int = 0
+    reviewed_count: int = 0
+    mastered_count: int = 0
+    avg_recall: float = 0.0
+
+
+def _rows(**overrides):
+    """All 20 topics zeroed, then apply overrides by tag."""
+    rows = {t: FakeRow() for t in dd.query_topics()}
+    rows.update(overrides)
+    return rows
+
+
+def test_empty_collection_suppresses_headline_and_gates_readiness():
+    vm = dd.build_view_model(_rows(), generated_at="t")
+    assert vm["memory"]["headline"] is None
+    assert vm["coverage"]["deck_pct"] == 0.0
+    assert vm["coverage"]["studied_pct"] == 0.0
+    assert vm["readiness"]["state"] == "insufficient_evidence"
+    assert vm["performance"]["state"] == "not_available"
+
+
+def test_coverage_counts_deck_and_studied():
+    vm = dd.build_view_model(_rows(**{
+        "topic::calculus::integral_single": FakeRow(total_cards=5, reviewed_count=3, mastered_count=2, avg_recall=0.7),
+        "topic::algebra::linear": FakeRow(total_cards=4, reviewed_count=0, mastered_count=0),
+    }), generated_at="t")
+    assert vm["coverage"]["deck_pct"] == pytest.approx(2 / 17)
+    assert vm["coverage"]["studied_pct"] == pytest.approx(1 / 17)
+
+
+def test_next_best_topic_prefers_highest_weight_uncovered_leaf():
+    # nothing studied -> highest-weight bucket (calculus) first leaf, taxonomy order
+    assert dd.next_best_topic(_rows(), dd.load_taxonomy()) == "topic::calculus::differential_single"
+
+
+def test_headline_uses_bucket_rows_rolled_up_by_rpc():
+    vm = dd.build_view_model(_rows(**{
+        "topic::calculus": FakeRow(total_cards=100, reviewed_count=10, mastered_count=8, avg_recall=0.82),
+        "topic::algebra": FakeRow(total_cards=40, reviewed_count=5, mastered_count=3, avg_recall=0.6),
+    }), generated_at="t")
+    assert vm["memory"]["headline"]["point"] == pytest.approx(0.7333, abs=0.001)
+    assert vm["memory"]["headline"]["buckets_reflected"] == 2
