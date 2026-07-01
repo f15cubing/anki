@@ -93,6 +93,15 @@ def test_next_best_topic_prefers_highest_weight_uncovered_leaf():
     assert dd.next_best_topic(_rows(), dd.load_taxonomy()) == "topic::calculus::differential_single"
 
 
+def test_next_best_topic_all_studied_returns_lowest_memory_lower_bound():
+    # every leaf studied -> no uncovered leaf; fall through to lowest Wilson lower-bound
+    tax = dd.load_taxonomy()
+    rows = {t: FakeRow(total_cards=10, reviewed_count=10, mastered_count=9) for t in dd.query_topics()}
+    weakest = "topic::algebra::linear"
+    rows[weakest] = FakeRow(total_cards=10, reviewed_count=10, mastered_count=1)
+    assert dd.next_best_topic(rows, tax) == weakest
+
+
 def test_headline_uses_bucket_rows_rolled_up_by_rpc():
     vm = dd.build_view_model(_rows(**{
         "topic::calculus": FakeRow(total_cards=100, reviewed_count=10, mastered_count=8, avg_recall=0.82),
