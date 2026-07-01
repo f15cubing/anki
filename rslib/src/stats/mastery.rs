@@ -187,4 +187,41 @@ mod tests {
             "collection must not be corrupted"
         );
     }
+
+    // Manual perf smoke test (excluded from the normal suite). Run with:
+    //   cargo test -p anki stats::mastery::tests::mastery_query_50k_perf \
+    //     --release -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn mastery_query_50k_perf() {
+        use std::time::Instant;
+
+        let leaves = [
+            "topic::calculus::integral_single",
+            "topic::calculus::differential_single",
+            "topic::algebra::linear",
+            "topic::additional::probability_stats",
+        ];
+        let mut col = Collection::new();
+        for i in 0..50_000usize {
+            let mut note = col.basic_notetype().new_note();
+            note.tags = vec![leaves[i % leaves.len()].to_string()];
+            note.set_field(0, format!("q{i}")).unwrap();
+            note.set_field(1, "a").unwrap();
+            col.add_note(&mut note, DeckId(1)).unwrap();
+        }
+        let topics: Vec<String> = leaves.iter().map(|s| s.to_string()).collect();
+
+        let mut samples = Vec::new();
+        for _ in 0..20 {
+            let t = Instant::now();
+            let _ = col.mastery_for_topics(&topics).unwrap();
+            samples.push(t.elapsed().as_secs_f64() * 1000.0);
+        }
+        samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let p50 = samples[samples.len() / 2];
+        let p95 = samples[(samples.len() as f64 * 0.95) as usize];
+        println!("mastery 50k: p50={p50:.2}ms p95={p95:.2}ms");
+        assert!(p50 < 50.0, "p50 {p50:.2}ms exceeds 50ms target");
+    }
 }
