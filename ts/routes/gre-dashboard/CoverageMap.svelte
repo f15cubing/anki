@@ -17,6 +17,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <section class="coverage">
     <h2>Coverage map</h2>
     <p class="muted">Deck coverage {pct(coverage.deck_pct)} · studied coverage {pct(coverage.studied_pct)}</p>
+    <p class="muted legend">Each studied topic shows the recall estimate (95% confidence range).</p>
     {#each Object.entries(byBucket) as [bucket, leaves]}
         <h3>{bucket}</h3>
         <div class="grid">
