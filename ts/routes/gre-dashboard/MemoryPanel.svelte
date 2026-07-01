@@ -27,7 +27,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     <span class="w">({pct(b.weight)} of exam)</span>
                     {#if b.reviewed > 0}
                         {pct(b.point)} <span class="range">({pct(b.low)}–{pct(b.high)})</span>
-                        · mean R {b.mean_r.toFixed(2)} · n={b.reviewed}
+                        · mean R {b.mean_r?.toFixed(2) ?? "—"} · n={b.reviewed}
                     {:else}
                         <span class="muted">not studied yet</span>
                     {/if}

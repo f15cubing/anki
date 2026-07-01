@@ -44,7 +44,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 body={`Insufficient evidence to score — studied ${Math.round(
                     vm.readiness.studied_pct * 100,
                 )}% of topics. Best next: ${vm.readiness.next_best_topic ?? "—"}.`}
-                state={vm.readiness.state} />
+                state={vm.readiness.state}
+                reasons={vm.readiness.reasons} />
         </div>
         <CoverageMap coverage={vm.coverage} />
     {/if}
