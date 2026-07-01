@@ -1024,6 +1024,16 @@ class Collection(DeprecatedNamesMixin):
     ) -> Sequence[stats_pb2.CardStatsResponse.StatsRevlogEntry]:
         return self._backend.get_review_logs(card_id)
 
+    def mastery_query(self, topics: Sequence[str]) -> Sequence[stats_pb2.TopicMastery]:
+        """Per-topic mastery over the collection (read-only).
+
+        Each requested tag matches that tag and its ``::*`` descendants. Returns
+        one row per requested topic (in request order) with total/reviewed/
+        mastered card counts and mean FSRS recall. (The single-field
+        ``MasteryResponse`` is unwrapped to its ``topics`` by codegen.)
+        """
+        return self._backend.mastery_query(topics=list(topics))
+
     def studied_today(self) -> str:
         return self._backend.studied_today()
 
