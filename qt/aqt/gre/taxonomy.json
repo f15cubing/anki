@@ -1,0 +1,14 @@
+{
+  "tag_prefix": "topic",
+  "tag_sep": "::",
+  "buckets": [
+    { "name": "calculus", "weight": 0.50,
+      "leaves": ["differential_single", "integral_single", "differential_multi",
+                 "integral_multi", "differential_equations", "applications"] },
+    { "name": "algebra", "weight": 0.25,
+      "leaves": ["elementary", "linear", "abstract", "number_theory"] },
+    { "name": "additional", "weight": 0.25,
+      "leaves": ["real_analysis", "discrete", "topology", "geometry",
+                 "complex", "probability_stats", "numerical"] }
+  ]
+}
