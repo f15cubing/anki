@@ -62,3 +62,41 @@ def all_bucket_tags(tax: Taxonomy | None = None) -> list[str]:
 def query_topics(tax: Taxonomy | None = None) -> list[str]:
     tax = tax or load_taxonomy()
     return all_leaf_tags(tax) + all_bucket_tags(tax)
+
+
+def wilson_interval(mastered: int, reviewed: int, z: float = 1.96) -> tuple[float, float, float]:
+    """(point, low, high). point = raw proportion; [low,high] = Wilson score CI."""
+    if reviewed <= 0:
+        return (0.0, 0.0, 0.0)
+    n = reviewed
+    p = mastered / n
+    denom = 1.0 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    half = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / denom
+    return (p, max(0.0, center - half), min(1.0, center + half))
+
+
+def headline(bucket_points: list[dict], z: float = 1.96) -> dict | None:
+    """ETS-weighted (50/25/25) headline over buckets that have reviews.
+
+    Buckets with reviewed==0 are excluded and remaining weights renormalized.
+    Interval via weighted normal error propagation over the pooled proportions.
+    """
+    present = [b for b in bucket_points if b["reviewed"] > 0]
+    if not present:
+        return None
+    wsum = sum(b["weight"] for b in present)
+    point = sum((b["weight"] / wsum) * b["point"] for b in present)
+    var = 0.0
+    for b in present:
+        w = b["weight"] / wsum
+        p = b["point"]
+        var += w * w * p * (1 - p) / b["reviewed"]
+    se = math.sqrt(var)
+    return {
+        "point": point,
+        "low": max(0.0, point - z * se),
+        "high": min(1.0, point + z * se),
+        "buckets_reflected": len(present),
+        "buckets_total": len(bucket_points),
+    }
