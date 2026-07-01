@@ -4,7 +4,6 @@ import json
 import types
 
 import aqt.mediasrv as m
-from aqt.gre import dashboard_data as dd
 
 
 def test_page_and_endpoint_are_registered():
