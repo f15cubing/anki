@@ -135,6 +135,40 @@ impl super::SqliteStorage {
             .collect()
     }
 
+    /// One read-only pass: every card's note tags plus its current FSRS
+    /// retrievability `R` (NULL when the card has no memory state). No queue or
+    /// suspension filter, so suspended and buried cards are included — mastery
+    /// reflects knowledge, not scheduling state. The timing ints come from
+    /// `timing_today()` and are interpolated (no user input in the SQL); the
+    /// UDF call mirrors `search/sqlwriter.rs`.
+    ///
+    /// New cards (`type = 0`) are short-circuited to NULL: they have no memory
+    /// state (so `R` is definitionally absent), and this also avoids an
+    /// upstream debug-only integer overflow in `extract_fsrs_retrievability`
+    /// when `days_elapsed < due` for an unreviewed card on a young collection.
+    pub(crate) fn all_card_tags_and_retrievability(
+        &self,
+        days_elapsed: u32,
+        next_day_at: i64,
+        now: i64,
+    ) -> Result<Vec<(String, Option<f64>)>> {
+        let sql = format!(
+            "SELECT n.tags, \
+             case when c.type = 0 then null else \
+               extract_fsrs_retrievability(c.data, \
+                 case when c.odue != 0 then c.odue else c.due end, c.ivl, \
+                 {days_elapsed}, {next_day_at}, {now}) \
+             end \
+             FROM cards c JOIN notes n ON c.nid = n.id"
+        );
+        self.db
+            .prepare(&sql)?
+            .query_and_then([], |row| -> Result<(String, Option<f64>)> {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .collect()
+    }
+
     pub(crate) fn update_card(&self, card: &Card) -> Result<()> {
         let mut stmt = self.db.prepare_cached(include_str!("update_card.sql"))?;
         stmt.execute(params![

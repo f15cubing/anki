@@ -16,11 +16,36 @@ service StatsService {
   rpc Graphs(GraphsRequest) returns (GraphsResponse);
   rpc GetGraphPreferences(generic.Empty) returns (GraphPreferences);
   rpc SetGraphPreferences(GraphPreferences) returns (generic.Empty);
+  rpc MasteryQuery(MasteryRequest) returns (MasteryResponse);
 }
 
 // Implicitly includes any of the above methods that are not listed in the
 // backend service.
 service BackendStatsService {}
+
+// Per-topic mastery over the collection (read-only). See PRD §5.
+message MasteryRequest {
+  // Tag strings; each matches that tag AND its ::* descendants (hierarchical).
+  repeated string topics = 1;
+}
+
+message TopicMastery {
+  // Echoes the requested tag.
+  string topic = 1;
+  // Matching cards, including suspended/buried/new.
+  uint32 total_cards = 2;
+  // Of those, cards with an FSRS memory state (non-null retrievability).
+  uint32 reviewed_count = 3;
+  // Of the reviewed cards, those with retrievability R >= 0.9.
+  uint32 mastered_count = 4;
+  // Mean R over reviewed cards; 0.0 when reviewed_count == 0.
+  double avg_recall = 5;
+}
+
+message MasteryResponse {
+  // One row per requested topic, in request order.
+  repeated TopicMastery topics = 1;
+}
 
 message ReviewLogs {
   repeated CardStatsResponse.StatsRevlogEntry entries = 1;
