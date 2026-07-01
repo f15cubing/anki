@@ -1,6 +1,9 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+from dataclasses import dataclass as _dc
+
 import pytest
+
 from aqt.gre import dashboard_data as dd
 
 
@@ -13,7 +16,6 @@ def test_taxonomy_has_17_leaves_and_weights_sum_to_one():
 
 
 def test_query_topics_lists_leaf_tags_then_bucket_tags():
-    tax = dd.load_taxonomy()
     topics = dd.query_topics()
     assert topics[0] == "topic::calculus::differential_single"
     assert topics[16] == "topic::additional::numerical"
@@ -51,9 +53,6 @@ def test_headline_reweights_when_a_bucket_has_no_reviews():
     assert out["buckets_reflected"] == 2
     assert out["buckets_total"] == 3
     assert 0.0 <= out["low"] <= out["point"] <= out["high"] <= 1.0
-
-
-from dataclasses import dataclass as _dc
 
 
 @_dc

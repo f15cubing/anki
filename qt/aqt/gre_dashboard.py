@@ -7,8 +7,8 @@ import aqt.main
 from aqt.qt import (
     QAction,
     QDialog,
-    QVBoxLayout,
     Qt,
+    QVBoxLayout,
     qconnect,
 )
 from aqt.utils import add_close_shortcut, disable_help_button, restoreGeom, saveGeom
