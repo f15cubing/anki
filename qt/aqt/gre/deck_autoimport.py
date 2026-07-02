@@ -77,10 +77,15 @@ def maybe_import_gre_deck(mw: object) -> None:
     if col.get_config(_CONFIG_KEY, None) == GRE_DECK_VERSION:
         return
 
+    # QueryOp (not CollectionOp) is intentional: this one-time setup import is not
+    # a user-undoable action, so we deliberately keep it off the undo stack. Do not
+    # "fix" this to CollectionOp. The op calls _run_if_needed (not _import_bundled)
+    # so it re-checks the version inside the background thread — self-contained and
+    # safe against a redundant dispatch.
     from aqt.operations import QueryOp
 
     QueryOp(
         parent=mw,  # type: ignore[arg-type]
-        op=lambda col: _import_bundled(col),
-        success=lambda _n: mw.reset(),  # type: ignore[union-attr]
+        op=lambda col: _run_if_needed(col),
+        success=lambda _ran: mw.reset(),  # type: ignore[union-attr]
     ).run_in_background()
