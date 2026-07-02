@@ -3,49 +3,126 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    const { memory, generatedAt }: { memory: any; generatedAt: string } = $props();
-    const pct = (x: number) => `${Math.round(x * 100)}%`;
+    import CalibrationStrip from "./CalibrationStrip.svelte";
+
+    const { memory }: { memory: any } = $props();
     const h = $derived(memory.headline);
+    const pct = (x: number) => `${Math.round(x * 100)}%`;
+    const totalReviewed = $derived(
+        (memory.buckets ?? []).reduce(
+            (sum: number, b: any) => sum + (b.reviewed ?? 0),
+            0,
+        ),
+    );
 </script>
 
 <section class="memory">
-    <h2>Memory</h2>
+    <div class="eyebrow">Memory · what you can recall now</div>
+
     {#if !h}
-        <p class="muted">No graded reviews yet — insufficient evidence for a memory score.</p>
-    {:else}
-        <p class="headline">
-            You can reliably recall <strong>~{pct(h.point)}</strong> of what you've studied
-            <span class="range">(95% CI {pct(h.low)}–{pct(h.high)})</span>
+        <p class="empty">
+            No graded reviews yet — insufficient evidence for a memory score. Study a
+            few cards and reopen this dashboard.
         </p>
+    {:else}
+        <p class="lede">
+            You can reliably recall about <strong>{pct(h.point)}</strong>
+            of what you've studied.
+        </p>
+        <CalibrationStrip point={h.point} low={h.low} high={h.high} n={totalReviewed} />
         {#if h.buckets_reflected < h.buckets_total}
-            <p class="muted">Headline reflects {h.buckets_reflected}/{h.buckets_total} buckets.</p>
+            <p class="caveat">
+                Headline reflects {h.buckets_reflected} of {h.buckets_total} exam areas —
+                the rest have no graded reviews yet.
+            </p>
         {/if}
-        <ul class="buckets">
+
+        <div class="buckets">
             {#each memory.buckets as b}
-                <li>
-                    <span class="name">{b.bucket}</span>
-                    <span class="w">({pct(b.weight)} of exam)</span>
-                    {#if b.reviewed > 0}
-                        {pct(b.point)} <span class="range">({pct(b.low)}–{pct(b.high)})</span>
-                        · mean R {b.mean_r?.toFixed(2) ?? "—"} · n={b.reviewed}
-                    {:else}
-                        <span class="muted">not studied yet</span>
+                <div class="bucket">
+                    <CalibrationStrip
+                        label={`${b.bucket} · ${pct(b.weight)} of exam`}
+                        point={b.reviewed > 0 ? b.point : null}
+                        low={b.reviewed > 0 ? b.low : null}
+                        high={b.reviewed > 0 ? b.high : null}
+                        n={b.reviewed > 0 ? b.reviewed : null}
+                        compact
+                    />
+                    {#if b.reviewed > 0 && b.mean_r != null}
+                        <span class="meanr">mean recall {b.mean_r.toFixed(2)}</span>
                     {/if}
-                </li>
+                </div>
             {/each}
-        </ul>
+        </div>
     {/if}
-    <p class="muted note">
-        Aggregate-calibrated (population FSRS defaults), not personalized. Updated {generatedAt}.
+
+    <p class="foot">
+        Aggregate-calibrated on population FSRS defaults — not a personalized model.
+        Areas are weighted 50 / 25 / 25 (calculus / algebra / additional) to match the
+        exam.
     </p>
 </section>
 
 <style>
-    .memory { border: 1px solid var(--border, #ccc); border-radius: 8px; padding: 1rem; }
-    .headline { font-size: 1.1rem; }
-    .range { color: var(--fg-subtle, #666); }
-    .muted { color: var(--fg-subtle, #888); }
-    .buckets { list-style: none; padding: 0; }
-    .buckets li { padding: 0.25rem 0; }
-    .note { font-size: 0.85rem; margin-top: 0.75rem; }
+    .memory {
+        background: var(--gre-surface);
+        border: 1px solid var(--gre-hairline);
+        border-radius: var(--gre-radius);
+        padding: 1.25rem 1.35rem;
+    }
+    .eyebrow {
+        font-family: var(--gre-mono);
+        font-size: var(--gre-fs-eyebrow);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--gre-muted);
+        margin-bottom: 0.75rem;
+    }
+    .lede {
+        font-size: var(--gre-fs-headline);
+        line-height: 1.3;
+        color: var(--gre-ink);
+        margin: 0 0 0.75rem;
+    }
+    .lede strong {
+        color: var(--gre-signal);
+        font-weight: 700;
+    }
+    .empty {
+        color: var(--gre-muted);
+        font-size: var(--gre-fs-body);
+    }
+    .caveat {
+        color: var(--gre-muted);
+        font-size: 0.82rem;
+        margin: 0.6rem 0 0;
+    }
+    .buckets {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        margin-top: 1.2rem;
+        padding-top: 1.1rem;
+        border-top: 1px solid var(--gre-hairline);
+    }
+    .bucket {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+    }
+    .bucket :global(.label) {
+        text-transform: capitalize;
+    }
+    .meanr {
+        font-family: var(--gre-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 0.78rem;
+        color: var(--gre-muted);
+    }
+    .foot {
+        margin: 1.2rem 0 0;
+        font-size: 0.78rem;
+        color: var(--gre-muted);
+        line-height: 1.45;
+    }
 </style>

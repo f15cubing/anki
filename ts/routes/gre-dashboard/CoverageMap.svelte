@@ -3,8 +3,13 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <script lang="ts">
-    const { coverage }: { coverage: any } = $props();
+    import CalibrationStrip from "./CalibrationStrip.svelte";
+
+    const { coverage, bestNext = null }: { coverage: any; bestNext?: string | null } =
+        $props();
     const pct = (x: number) => `${Math.round(x * 100)}%`;
+    const prettyLeaf = (leaf: string) => leaf.replace(/_/g, " ");
+
     const byBucket = $derived.by(() => {
         const groups: Record<string, any[]> = {};
         for (const leaf of coverage.leaves) {
@@ -15,21 +20,44 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </script>
 
 <section class="coverage">
-    <h2>Coverage map</h2>
-    <p class="muted">Deck coverage {pct(coverage.deck_pct)} · studied coverage {pct(coverage.studied_pct)}</p>
-    <p class="muted legend">Each studied topic shows the recall estimate (95% confidence range).</p>
+    <div class="head">
+        <div class="eyebrow">Coverage · the 17 exam leaf topics</div>
+        <div class="stats">
+            <span>
+                <b>{pct(coverage.deck_pct)}</b>
+                in deck
+            </span>
+            <span>
+                <b>{pct(coverage.studied_pct)}</b>
+                studied
+            </span>
+        </div>
+    </div>
+
     {#each Object.entries(byBucket) as [bucket, leaves]}
         <h3>{bucket}</h3>
         <div class="grid">
             {#each leaves as leaf}
-                <div class="cell" class:uncovered={!leaf.has_cards} class:studied={leaf.studied}>
-                    <span class="leaf">{leaf.leaf}</span>
+                <div
+                    class="cell"
+                    class:uncovered={!leaf.has_cards}
+                    class:best={leaf.tag === bestNext}
+                >
+                    <span class="name">{prettyLeaf(leaf.leaf)}</span>
                     {#if leaf.studied && leaf.memory}
-                        <span class="mem">{pct(leaf.memory.point)} ({pct(leaf.memory.low)}–{pct(leaf.memory.high)})</span>
-                    {:else if leaf.has_cards}
-                        <span class="muted">not studied</span>
+                        <CalibrationStrip
+                            point={leaf.memory.point}
+                            low={leaf.memory.low}
+                            high={leaf.memory.high}
+                            n={leaf.memory.reviewed}
+                            compact
+                        />
                     {:else}
-                        <span class="muted">no cards</span>
+                        <CalibrationStrip
+                            point={null}
+                            compact
+                            emptyLabel={leaf.has_cards ? "not studied" : "no cards"}
+                        />
                     {/if}
                 </div>
             {/each}
@@ -38,12 +66,70 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 </section>
 
 <style>
-    .coverage { margin-top: 1rem; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.5rem; }
-    .cell { border: 1px solid var(--border, #ccc); border-radius: 6px; padding: 0.5rem; display: flex; flex-direction: column; }
-    .cell.studied { border-color: var(--accent, #4c8bf5); }
-    .cell.uncovered { opacity: 0.55; }
-    .leaf { font-weight: 600; }
-    .mem { color: var(--fg-subtle, #555); }
-    .muted { color: var(--fg-subtle, #888); }
+    .coverage {
+        background: var(--gre-surface);
+        border: 1px solid var(--gre-hairline);
+        border-radius: var(--gre-radius);
+        padding: 1.25rem 1.35rem;
+    }
+    .head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.5rem;
+    }
+    .eyebrow {
+        font-family: var(--gre-mono);
+        font-size: var(--gre-fs-eyebrow);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--gre-muted);
+    }
+    .stats {
+        display: flex;
+        gap: 1rem;
+        font-family: var(--gre-mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 0.82rem;
+        color: var(--gre-muted);
+    }
+    .stats b {
+        color: var(--gre-ink);
+    }
+    h3 {
+        text-transform: capitalize;
+        font-size: 0.9rem;
+        color: var(--gre-ink);
+        margin: 1.1rem 0 0.55rem;
+    }
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 0.6rem;
+    }
+    .cell {
+        border: 1px solid var(--gre-hairline);
+        border-radius: 8px;
+        padding: 0.55rem 0.65rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.35rem;
+        background: var(--gre-surface);
+    }
+    .cell.uncovered {
+        opacity: 0.6;
+    }
+    /* The single best-next topic gets a quiet ring — the one place the eye is led. */
+    .cell.best {
+        border-color: var(--gre-signal);
+        box-shadow: 0 0 0 1px var(--gre-signal);
+    }
+    .name {
+        font-weight: 600;
+        font-size: 0.84rem;
+        color: var(--gre-ink);
+        text-transform: capitalize;
+    }
 </style>
