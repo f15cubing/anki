@@ -106,6 +106,15 @@ def _add_gre_dashboard_menu() -> None:
 
 gui_hooks.main_window_did_init.append(_add_gre_dashboard_menu)
 
+
+def _add_gre_exam_menu() -> None:
+    from aqt.gre_exam import setup_gre_exam_menu
+
+    setup_gre_exam_menu(aqt.mw)
+
+
+gui_hooks.main_window_did_init.append(_add_gre_exam_menu)
+
 MainWindowState = Literal[
     "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
 ]

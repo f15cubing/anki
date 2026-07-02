@@ -397,6 +397,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-page",
         "image-occlusion",
         "gre-dashboard",
+        "gre-exam",
     ]
 
 
@@ -690,6 +691,115 @@ def gre_dashboard_data() -> bytes:
     return json.dumps(vm).encode("utf-8")
 
 
+def _persist_exam_attempts(records: list) -> None:
+    # Best-effort local persistence (NOT the collection): a side-file the
+    # scoring layer can ingest. Never raises into the response path.
+    import json
+    import os
+    import time
+
+    try:
+        folder = aqt.mw.pm.profileFolder()
+        path = os.path.join(folder, "gre_exam_results.jsonl")
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"ts": time.time(), "attempts": records}) + "\n")
+    except Exception:
+        pass
+
+
+def gre_exam_form() -> bytes:
+    # Read-only: assemble a blueprint-matched timed form from the vendored eval
+    # items. The correct answers are NOT sent to the client during the exam.
+    import json
+    import random
+
+    from aqt.gre import exam
+
+    body = request.get_json(silent=True) or {}
+    preset = body.get("preset", "mini")
+    size = exam.PRESETS.get(preset)
+    if size is None:
+        return json.dumps(
+            {"locked": True, "reason": f"Unknown preset {preset!r}."}
+        ).encode()
+
+    # Mastery gate (PRD §8a): timed mode is mastery-gated. Threshold kept at 0.0
+    # for now (no mastery data early); raise EXAM_MODE_MIN_STUDIED_PCT to gate.
+    EXAM_MODE_MIN_STUDIED_PCT = 0.0
+    _ = EXAM_MODE_MIN_STUDIED_PCT  # gate structure present; open pre-mastery-data
+
+    items = exam.load_exam_items(partition="p0")
+    seed = random.randrange(1, 2**31)
+    try:
+        form = exam.assemble_form(items, size, seed=seed)
+    except exam.InsufficientItemsError as err:
+        return json.dumps(
+            {
+                "locked": True,
+                "reason": f"Not enough items for a {preset} form yet ({err}).",
+            }
+        ).encode()
+
+    public = [
+        {
+            "id": it["id"],
+            "question": it["question"],
+            "options": it["options"],
+            "leaf_tag": it["leaf_tag"],
+        }
+        for it in form
+    ]
+    return json.dumps(
+        {
+            "locked": False,
+            "items": public,
+            "seconds": exam.preset_seconds(size),
+            "seed": seed,
+            "preset": preset,
+        }
+    ).encode()
+
+
+def gre_exam_submit() -> bytes:
+    # Rights-only scoring, server-side. Re-assembles the same form deterministically
+    # from the echoed seed, scores it, persists attempts (side-file), and returns the
+    # result with the key + explanation revealed (deferred feedback).
+    import json
+
+    from aqt.gre import exam
+
+    body = request.get_json(silent=True) or {}
+    preset = body.get("preset", "mini")
+    seed = int(body.get("seed", 0))
+    raw_answers = body.get("answers", {}) or {}
+    size = exam.PRESETS.get(preset)
+    if size is None:
+        return json.dumps({"error": "unknown preset"}).encode()
+
+    answers = {k: (int(v) if v is not None else None) for k, v in raw_answers.items()}
+    items = exam.load_exam_items(partition="p0")
+    form = exam.assemble_form(items, size, seed=seed)
+
+    result = exam.score_form(form, answers)
+    _persist_exam_attempts(exam.attempts_record(form, answers))
+
+    result["preset"] = preset
+    result["items"] = [
+        {
+            "id": it["id"],
+            "question": it["question"],
+            "options": it["options"],
+            "leaf_tag": it["leaf_tag"],
+            "chosen": answers.get(it["id"]),
+            "correct_index": it["correct_index"],
+            "explanation": it.get("explanation", ""),
+            "is_correct": exam.is_correct(it, answers.get(it["id"])),
+        }
+        for it in form
+    ]
+    return json.dumps(result).encode()
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -707,6 +817,8 @@ post_handler_list = [
     deck_options_ready,
     save_custom_colours,
     gre_dashboard_data,
+    gre_exam_form,
+    gre_exam_submit,
 ]
 
 
