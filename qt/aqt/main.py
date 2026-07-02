@@ -106,6 +106,15 @@ def _add_gre_dashboard_menu() -> None:
 
 gui_hooks.main_window_did_init.append(_add_gre_dashboard_menu)
 
+
+def _autoimport_gre_deck(_col: object) -> None:
+    from aqt.gre.deck_autoimport import maybe_import_gre_deck
+
+    maybe_import_gre_deck(aqt.mw)
+
+
+gui_hooks.collection_did_load.append(_autoimport_gre_deck)
+
 MainWindowState = Literal[
     "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"
 ]
