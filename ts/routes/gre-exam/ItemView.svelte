@@ -5,11 +5,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <!--
 One item on screen at a time (faithful to the exam): the stem + five
 single-select options A–E. No per-item feedback — correctness is only revealed
-after the whole form is submitted. Math is shown as monospace ASCII (the source
-items are plain expressions, not LaTeX).
+after the whole form is submitted. Item math is delimited LaTeX (\(...\)) and is
+typeset by MathJax; the parent keys this component by item id, so each item gets
+a fresh DOM to typeset (no Svelte/MathJax churn on re-select).
 -->
 <script lang="ts">
     import { OPTION_LETTERS } from "./lib";
+    import { typesetMath } from "./mathjax";
 
     interface Props {
         number: number;
@@ -18,9 +20,19 @@ items are plain expressions, not LaTeX).
         onselect: (index: number) => void;
     }
     const { number, item, chosen, onselect }: Props = $props();
+
+    let root = $state<HTMLElement | undefined>(undefined);
+    // Typeset once this item's DOM is present. Reading `item` keeps the effect
+    // correct if the component is ever reused without a key change.
+    $effect(() => {
+        void item;
+        if (root) {
+            typesetMath([root]);
+        }
+    });
 </script>
 
-<div class="item">
+<div class="item" bind:this={root}>
     <p class="stem">
         <span class="num">{number}.</span>
         <span class="q">{item.question}</span>

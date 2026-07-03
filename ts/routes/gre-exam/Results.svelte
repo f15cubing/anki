@@ -11,6 +11,7 @@ blended with Memory/Performance here.
 <script lang="ts">
     import CalibrationStrip from "../gre-dashboard/CalibrationStrip.svelte";
     import { OPTION_LETTERS } from "./lib";
+    import { typesetMath } from "./mathjax";
 
     const { result }: { result: any } = $props();
     const buckets = $derived(
@@ -19,9 +20,19 @@ blended with Memory/Performance here.
             { correct: number; total: number },
         ][],
     );
+
+    let root = $state<HTMLElement | undefined>(undefined);
+    // The review list (stems, options, explanations) is rendered once on submit;
+    // typeset its delimited LaTeX after it mounts.
+    $effect(() => {
+        void result;
+        if (root) {
+            typesetMath([root]);
+        }
+    });
 </script>
 
-<div class="results">
+<div class="results" bind:this={root}>
     <h2>Results</h2>
     <p class="headline">
         You answered <strong>{result.correct}</strong>
@@ -35,7 +46,7 @@ blended with Memory/Performance here.
     />
     <p class="note">
         This raw score feeds the <strong>Readiness</strong>
-         estimate — it is not blended with your Memory or Performance scores.
+        estimate — it is not blended with your Memory or Performance scores.
     </p>
 
     <h3>By area</h3>

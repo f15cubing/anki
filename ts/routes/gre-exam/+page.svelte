@@ -184,12 +184,14 @@ server-side (the client never receives the keys during the exam).
 
         <main class="stage">
             {#if phase === "exam"}
-                <ItemView
-                    number={idx + 1}
-                    item={current}
-                    chosen={answers[current.id] ?? null}
-                    onselect={select}
-                />
+                {#key current.id}
+                    <ItemView
+                        number={idx + 1}
+                        item={current}
+                        chosen={answers[current.id] ?? null}
+                        onselect={select}
+                    />
+                {/key}
             {:else}
                 <div class="review-head">
                     <p>
