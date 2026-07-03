@@ -37,3 +37,41 @@ def test_run_if_needed_triggers_on_missing_version(tmp_path):
     assert ran, "_run_if_needed should return True when version not set"
     assert col.card_count() > 5000
     col.close()
+
+
+def test_first_import_stamps_guid_scheme(tmp_path):
+    col = _fresh(tmp_path)
+    ai._import_bundled(col)
+    assert col.get_config(ai._GUID_SCHEME_KEY) == ai._GUID_SCHEME
+    col.close()
+
+
+def test_pre_uid_reimport_does_not_duplicate(tmp_path):
+    # Simulate a pre-uid install: the bundled deck is present but the stored
+    # GUID scheme is unknown (legacy content-hash). A version-triggered re-import
+    # must run the one-time cleanup and NOT duplicate the deck.
+    col = _fresh(tmp_path)
+    ai._import_bundled(col)
+    single = col.card_count()
+    assert single > 5000
+    col.set_config(ai._CONFIG_KEY, "2020-01-01")  # force a re-import
+    col.remove_config(ai._GUID_SCHEME_KEY)  # pretend the scheme was never stamped
+    ai._import_bundled(col)
+    assert col.card_count() == single, (
+        f"pre-uid re-import duplicated the deck: {single} -> {col.card_count()}"
+    )
+    assert col.get_config(ai._GUID_SCHEME_KEY) == ai._GUID_SCHEME
+    col.close()
+
+
+def test_uid_reimport_updates_in_place(tmp_path):
+    # With the scheme already uid, a re-import matches by GUID: no cleanup, no dup.
+    col = _fresh(tmp_path)
+    ai._import_bundled(col)
+    single = col.card_count()
+    col.set_config(ai._CONFIG_KEY, "2020-01-01")  # force a re-import
+    ai._import_bundled(col)
+    assert col.card_count() == single, (
+        f"uid re-import changed card count: {single} -> {col.card_count()}"
+    )
+    col.close()

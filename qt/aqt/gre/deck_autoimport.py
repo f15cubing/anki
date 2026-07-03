@@ -13,6 +13,12 @@ Import policy (preserves the user's review history on re-import):
   - update_notetypes=IF_NEWER   — schema updates from the package only
   - with_scheduling=False       — do NOT overwrite FSRS state; user history wins
   - with_deck_configs=False     — keep user's deck settings unchanged
+
+History preservation relies on stable note GUIDs. The pipeline now derives GUIDs
+from a rendering-independent uid, so uid->uid re-imports update cards in place. A
+deck bundled under the OLD content-hash scheme can't be matched by GUID, so a
+one-time cleanup (`gre_deck_guid_scheme` gate) removes those legacy notes before
+the first uid import to avoid duplicating the whole deck.
 """
 
 from __future__ import annotations
@@ -27,17 +33,52 @@ GRE_DECK_VERSION = "2026-07-03"
 _ASSET = os.path.join(os.path.dirname(__file__), "data", "gre-study-deck.apkg")
 _CONFIG_KEY = "gre_deck_version"
 
+# Note GUIDs are derived from a stable, rendering-independent uid (pipeline
+# `build_deck`). Decks bundled BEFORE that scheme used content-hash GUIDs, which
+# the current package can't match by GUID -> a plain re-import would duplicate the
+# whole deck. We stamp the scheme we imported under this key; on a mismatch we run
+# a one-time cleanup (below) before importing.
+_GUID_SCHEME_KEY = "gre_deck_guid_scheme"
+_GUID_SCHEME = "uid"
+
+# The two note types the bundled deck ships (see pipeline/build_deck.py). Used to
+# identify previously-bundled notes for the one-time pre-uid cleanup.
+_BUNDLED_NOTETYPES = (
+    "GRE Math Basic (leaf-tagged)",
+    "GRE Math MCQ (leaf-tagged)",
+)
+
 _IF_NEWER = (
     ImportAnkiPackageUpdateCondition.IMPORT_ANKI_PACKAGE_UPDATE_CONDITION_IF_NEWER
 )
 
 
-def _import_bundled(col: Collection) -> int:
-    """Import the bundled deck and set the version config key.
+def _remove_pre_uid_bundled_notes(col: Collection) -> None:
+    """One-time migration off the legacy content-hash GUID scheme.
 
-    Returns the number of net-new cards added (may be 0 on a content-only
+    When the stored scheme isn't the current uid scheme, the previously-bundled
+    notes have content-hash GUIDs the new package can't match -> a plain import
+    would duplicate the deck. Remove those notes (identified by our two bundled
+    note types) exactly once; the subsequent import lays down uid-GUID cards, and
+    every future uid->uid import matches by GUID and preserves the user's history.
+
+    A fresh install has no such notes, so this is a harmless no-op there.
+    """
+    nids: list = []
+    for name in _BUNDLED_NOTETYPES:
+        nids.extend(col.find_notes('note:"{}"'.format(name)))
+    if nids:
+        col.remove_notes(nids)
+
+
+def _import_bundled(col: Collection) -> int:
+    """Import the bundled deck and stamp the version + GUID-scheme config keys.
+
+    Returns the number of net-new cards added (0 on a content-only uid->uid
     update where all GUIDs already existed).
     """
+    if col.get_config(_GUID_SCHEME_KEY, None) != _GUID_SCHEME:
+        _remove_pre_uid_bundled_notes(col)
     opts = ImportAnkiPackageOptions(
         merge_notetypes=True,
         update_notes=_IF_NEWER,
@@ -50,6 +91,7 @@ def _import_bundled(col: Collection) -> int:
         ImportAnkiPackageRequest(package_path=_ASSET, options=opts)
     )
     col.set_config(_CONFIG_KEY, GRE_DECK_VERSION)
+    col.set_config(_GUID_SCHEME_KEY, _GUID_SCHEME)
     return col.card_count() - before
 
 
