@@ -19,6 +19,17 @@ from a rendering-independent uid, so uid->uid re-imports update cards in place. 
 deck bundled under the OLD content-hash scheme can't be matched by GUID, so a
 one-time cleanup (`gre_deck_guid_scheme` gate) removes those legacy notes before
 the first uid import to avoid duplicating the whole deck.
+
+KNOWN LIMITATION (note-type template refresh on EXISTING installs): a bumped
+``GRE_DECK_VERSION`` re-triggers this import, and a FRESH install always gets the
+current bundled template. But because our ``.apkg`` build is byte-deterministic
+(fixed note-type ``mod``), ``update_notetypes=IF_NEWER`` sees the incoming
+note-type as "not newer" and keeps the existing template body — so a pure card-
+*template* change (e.g. the interactive MCQ template) does NOT reach installs that
+already imported an earlier bundle. ``ALWAYS`` was also verified not to force it
+(same-id merge keeps existing templates). Refreshing the template on existing
+installs is a separate follow-up (version-derived note-type ``mod``, or a template
+migration); it is out of scope for a content re-bundle.
 """
 
 from __future__ import annotations
@@ -28,7 +39,7 @@ import os
 from anki.collection import Collection, ImportAnkiPackageOptions, ImportAnkiPackageRequest
 from anki.import_export_pb2 import ImportAnkiPackageUpdateCondition
 
-GRE_DECK_VERSION = "2026-07-03"
+GRE_DECK_VERSION = "2026-07-03b"
 
 _ASSET = os.path.join(os.path.dirname(__file__), "data", "gre-study-deck.apkg")
 _CONFIG_KEY = "gre_deck_version"
