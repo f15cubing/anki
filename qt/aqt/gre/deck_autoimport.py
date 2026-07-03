@@ -95,12 +95,25 @@ def _import_bundled(col: Collection) -> int:
     return col.card_count() - before
 
 
+def _is_up_to_date(col: Collection) -> bool:
+    """True only when BOTH the version and the GUID scheme are current.
+
+    Gating on the scheme too (not just the version) means an install that already
+    re-imported under a buggy older build — same version, but a stale/absent GUID
+    scheme, and therefore possibly duplicated — still gets repaired on next launch.
+    """
+    return (
+        col.get_config(_CONFIG_KEY, None) == GRE_DECK_VERSION
+        and col.get_config(_GUID_SCHEME_KEY, None) == _GUID_SCHEME
+    )
+
+
 def _run_if_needed(col: Collection) -> bool:
-    """Import only when the stored version differs from GRE_DECK_VERSION.
+    """Import only when the deck is not up-to-date (version or GUID scheme stale).
 
     Returns True if an import was performed, False if already up-to-date.
     """
-    if col.get_config(_CONFIG_KEY, None) == GRE_DECK_VERSION:
+    if _is_up_to_date(col):
         return False
     _import_bundled(col)
     return True
@@ -116,7 +129,7 @@ def maybe_import_gre_deck(mw: object) -> None:
     col = getattr(mw, "col", None)
     if col is None:
         return
-    if col.get_config(_CONFIG_KEY, None) == GRE_DECK_VERSION:
+    if _is_up_to_date(col):
         return
 
     # QueryOp (not CollectionOp) is intentional: this one-time setup import is not

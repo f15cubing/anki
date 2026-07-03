@@ -64,6 +64,23 @@ def test_pre_uid_reimport_does_not_duplicate(tmp_path):
     col.close()
 
 
+def test_stale_scheme_at_current_version_triggers_repair(tmp_path):
+    # An install left at the current version but WITHOUT the uid scheme stamp
+    # (e.g. it re-imported under an older, buggy build) must still re-import so the
+    # one-time cleanup can repair it — the version guard alone would skip it.
+    col = _fresh(tmp_path)
+    ai._import_bundled(col)
+    single = col.card_count()
+    assert col.get_config(ai._CONFIG_KEY) == ai.GRE_DECK_VERSION
+    col.remove_config(ai._GUID_SCHEME_KEY)  # version current, scheme stale
+    assert not ai._is_up_to_date(col)
+    ran = ai._run_if_needed(col)
+    assert ran, "stale scheme at current version should trigger a repair import"
+    assert col.card_count() == single, "repair must not duplicate"
+    assert col.get_config(ai._GUID_SCHEME_KEY) == ai._GUID_SCHEME
+    col.close()
+
+
 def test_uid_reimport_updates_in_place(tmp_path):
     # With the scheme already uid, a re-import matches by GUID: no cleanup, no dup.
     col = _fresh(tmp_path)
