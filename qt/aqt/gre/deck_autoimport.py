@@ -22,7 +22,7 @@ import os
 from anki.collection import Collection, ImportAnkiPackageOptions, ImportAnkiPackageRequest
 from anki.import_export_pb2 import ImportAnkiPackageUpdateCondition
 
-GRE_DECK_VERSION = "2026-07-02"
+GRE_DECK_VERSION = "2026-07-03"
 
 _ASSET = os.path.join(os.path.dirname(__file__), "data", "gre-study-deck.apkg")
 _CONFIG_KEY = "gre_deck_version"
