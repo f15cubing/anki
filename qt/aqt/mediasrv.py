@@ -822,6 +822,13 @@ def gre_exam_submit() -> bytes:
 
     answers = {k: (int(v) if v is not None else None) for k, v in raw_answers.items()}
     items = exam.load_exam_items(partition="p0")
+    # Defensive: a forged submit for a preset the bank can't fill would otherwise raise
+    # InsufficientItemsError -> a generic 500. The normal flow never reaches here (submit
+    # only follows a successful greExamForm), but return a clean locked reason regardless.
+    if not exam.size_is_feasible(items, size):
+        return json.dumps(
+            {"locked": True, "reason": "That mock isn't available with the current bank."}
+        ).encode()
     form = exam.assemble_form(items, size, seed=seed)
 
     result = exam.score_form(form, answers)
