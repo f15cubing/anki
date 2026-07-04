@@ -107,6 +107,67 @@ def assemble_form(
     return chosen
 
 
+def bucket_pool_sizes(
+    items: list[dict], weights: dict[str, float] | None = None
+) -> dict[str, int]:
+    """Per-bucket count of available items (only buckets named in the blueprint)."""
+    weights = weights or BLUEPRINT
+    pools = {b: 0 for b in weights}
+    for item in items:
+        b = bucket_of(item["leaf_tag"])
+        if b in pools:
+            pools[b] += 1
+    return pools
+
+
+def size_is_feasible(
+    items: list[dict], size: int, weights: dict[str, float] | None = None
+) -> bool:
+    """True iff a blueprint-matched form of exactly `size` items can be drawn.
+
+    This is the cheap pre-check the exam endpoints use so a preset that the
+    firewalled bank cannot satisfy is never offered (rather than failing after
+    the user picks it). `size <= 0` is never feasible.
+    """
+    weights = weights or BLUEPRINT
+    if size <= 0:
+        return False
+    counts = blueprint_counts(size, weights)
+    pools = bucket_pool_sizes(items, weights)
+    return all(counts[b] <= pools.get(b, 0) for b in counts)
+
+
+def max_feasible_size(
+    items: list[dict],
+    weights: dict[str, float] | None = None,
+    cap: int = FULL_ITEMS,
+) -> int:
+    """Largest blueprint-matched form size in ``0..cap`` the pool supports (0 if none).
+
+    The blueprint apportionment is not perfectly monotonic in `size`, so we scan
+    from `cap` downward and return the first size that fits every bucket pool.
+    """
+    for size in range(cap, 0, -1):
+        if size_is_feasible(items, size, weights):
+            return size
+    return 0
+
+
+def feasible_presets(
+    items: list[dict], weights: dict[str, float] | None = None
+) -> list[dict]:
+    """Each named preset annotated with whether the current pool can build it."""
+    return [
+        {
+            "id": preset_id,
+            "items": size,
+            "seconds": preset_seconds(size),
+            "feasible": size_is_feasible(items, size, weights),
+        }
+        for preset_id, size in PRESETS.items()
+    ]
+
+
 def wilson_interval(
     correct: int, total: int, z: float = 1.96
 ) -> tuple[float, float, float]:

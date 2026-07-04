@@ -10,7 +10,7 @@ and no per-item feedback (results only after submit). Answers are scored
 server-side (the client never receives the keys during the exam).
 -->
 <script lang="ts">
-    import { onDestroy } from "svelte";
+    import { onDestroy, onMount } from "svelte";
 
     import "../gre-dashboard/tokens.css";
     import Countdown from "./Countdown.svelte";
@@ -40,6 +40,11 @@ server-side (the client never receives the keys during the exam).
     let result = $state<any>(null);
     let showHelp = $state(false);
 
+    // Which presets the firewalled held-out bank can actually build right now.
+    // Until this loads, presets stay enabled and the server guards each request.
+    let presetInfo = $state<Record<string, { feasible: boolean; items: number }>>({});
+    let maxFeasible = $state<number | null>(null);
+
     let timerId: ReturnType<typeof setInterval> | null = null;
 
     const current = $derived(form[idx]);
@@ -65,9 +70,13 @@ server-side (the client never receives the keys during the exam).
     }
 
     async function post(endpoint: string, body: unknown): Promise<any> {
+        // `mediasrv` rejects any POST whose Content-Type is not
+        // `application/binary` (403, before the auth check) — same as the
+        // dashboard's `greDashboardData` call. The JSON body still rides in the
+        // request bytes; the server parses it with `get_json(force=True)`.
         const resp = await fetch(`/_anki/${endpoint}`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/binary" },
             body: JSON.stringify(body),
         });
         if (!resp.ok) {
@@ -75,6 +84,21 @@ server-side (the client never receives the keys during the exam).
         }
         return resp.json();
     }
+
+    async function loadCapacity() {
+        try {
+            const cap = await post("greExamCapacity", {});
+            const map: Record<string, { feasible: boolean; items: number }> = {};
+            for (const p of cap.presets ?? []) {
+                map[p.id] = { feasible: !!p.feasible, items: p.items };
+            }
+            presetInfo = map;
+            maxFeasible = cap.max_feasible ?? null;
+        } catch (e) {
+            // Non-fatal: leave every preset enabled; the server guards each start.
+        }
+    }
+    onMount(loadCapacity);
 
     async function startExam(chosenPreset: string) {
         preset = chosenPreset;
@@ -152,12 +176,30 @@ server-side (the client never receives the keys during the exam).
         </p>
         <div class="presets">
             {#each PRESETS as p}
-                <button type="button" class="preset" onclick={() => startExam(p.id)}>
+                {@const info = presetInfo[p.id]}
+                {@const feasible = info ? info.feasible : true}
+                <button
+                    type="button"
+                    class="preset"
+                    class:unavailable={info && !feasible}
+                    disabled={info ? !feasible : false}
+                    onclick={() => startExam(p.id)}
+                >
                     <span class="p-label">{p.label}</span>
                     <span class="p-meta">{p.items} items · {p.time}</span>
+                    {#if info && !feasible}
+                        <span class="p-note">not enough held-out items yet</span>
+                    {/if}
                 </button>
             {/each}
         </div>
+        {#if maxFeasible !== null}
+            <p class="capacity-note">
+                The firewalled held-out bank can currently fill a blueprint-matched mock
+                of up to <strong>{maxFeasible}</strong> items — longer presets unlock as the
+                bank grows. Every mock keeps the official pace (~2.58 min/item).
+            </p>
+        {/if}
     {:else if phase === "loading"}
         <div class="notice">Preparing…</div>
     {:else if phase === "error"}
@@ -336,6 +378,35 @@ server-side (the client never receives the keys during the exam).
         font-family: var(--gre-mono);
         font-size: 0.8rem;
         color: var(--gre-muted);
+    }
+    .preset:disabled {
+        cursor: default;
+    }
+    .preset.unavailable {
+        border-style: dashed;
+        border-color: var(--gre-hairline);
+        opacity: 0.72;
+    }
+    .preset.unavailable:hover {
+        border-color: var(--gre-hairline);
+    }
+    .p-note {
+        font-family: var(--gre-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.02em;
+        color: var(--gre-abstain);
+    }
+    .capacity-note {
+        margin-top: 1rem;
+        max-width: 620px;
+        color: var(--gre-muted);
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+    .capacity-note strong {
+        font-family: var(--gre-mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--gre-ink);
     }
     .bar {
         display: flex;

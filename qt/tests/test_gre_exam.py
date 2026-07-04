@@ -86,6 +86,57 @@ def test_vendored_items_load_and_assemble_firewalled():
     assert all(str(it["id"]).startswith("eval-") for it in form)
 
 
+# --- capacity / feasibility (fixes the Exam Mode "API error") ---
+
+
+def test_bucket_pool_sizes_counts_by_bucket():
+    pools = exam.bucket_pool_sizes(_bank(calc=8, alg=7, add=9))
+    assert pools == {"calculus": 8, "algebra": 7, "additional": 9}
+
+
+def test_size_is_feasible_respects_pools():
+    small = _bank(calc=8, alg=7, add=9)  # mirrors the vendored p0 pool
+    assert exam.size_is_feasible(small, 11) is True  # mini fits
+    assert exam.size_is_feasible(small, 66) is False  # full does not
+    assert exam.size_is_feasible(small, 0) is False
+    big = _bank(calc=40, alg=20, add=20)
+    assert all(exam.size_is_feasible(big, n) for n in exam.PRESETS.values())
+
+
+def test_max_feasible_size_is_the_boundary():
+    small = _bank(calc=8, alg=7, add=9)
+    m = exam.max_feasible_size(small)
+    assert exam.size_is_feasible(small, m)
+    assert not exam.size_is_feasible(small, m + 1)
+    assert m >= exam.PRESETS["mini"]  # a mini mock is buildable
+    assert m < exam.PRESETS["third"]  # but not a 22-item one
+
+
+def test_feasible_presets_shape_and_flags():
+    presets = exam.feasible_presets(_bank(calc=8, alg=7, add=9))
+    by_id = {p["id"]: p for p in presets}
+    assert set(by_id) == set(exam.PRESETS)
+    for p in presets:
+        assert set(p) == {"id", "items", "seconds", "feasible"}
+        assert p["items"] == exam.PRESETS[p["id"]]
+        assert p["seconds"] == exam.preset_seconds(p["items"])
+    assert by_id["mini"]["feasible"] is True
+    assert by_id["full"]["feasible"] is False
+
+
+def test_vendored_p0_only_supports_short_mocks():
+    # Regression for the Exam Mode API error: the vendored held-out (p0) bank is
+    # small, so only the mini preset is buildable — the larger presets must report
+    # infeasible up front instead of raising after the user picks one.
+    items = exam.load_exam_items(partition="p0")
+    flags = {p["id"]: p["feasible"] for p in exam.feasible_presets(items)}
+    assert flags["mini"] is True
+    assert flags["full"] is False
+    assert flags["half"] is False
+    assert flags["third"] is False
+    assert exam.max_feasible_size(items) >= exam.PRESETS["mini"]
+
+
 # --- scoring ---
 
 FORM = [

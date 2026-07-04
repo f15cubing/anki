@@ -707,6 +707,24 @@ def _persist_exam_attempts(records: list) -> None:
         pass
 
 
+def gre_exam_capacity() -> bytes:
+    # Read-only: report which presets the firewalled held-out bank can actually
+    # build right now, so the setup screen offers only feasible mocks instead of
+    # letting the user pick one that fails. Never touches the collection.
+    import json
+
+    from aqt.gre import exam
+
+    items = exam.load_exam_items(partition="p0")
+    return json.dumps(
+        {
+            "presets": exam.feasible_presets(items),
+            "max_feasible": exam.max_feasible_size(items),
+            "pools": exam.bucket_pool_sizes(items),
+        }
+    ).encode()
+
+
 def gre_exam_form() -> bytes:
     # Read-only: assemble a blueprint-matched timed form from the vendored eval
     # items. The correct answers are NOT sent to the client during the exam.
@@ -715,7 +733,9 @@ def gre_exam_form() -> bytes:
 
     from aqt.gre import exam
 
-    body = request.get_json(silent=True) or {}
+    # force=True: the client posts with Content-Type application/binary (required
+    # by the API-access gate), so get_json must ignore the content type to parse.
+    body = request.get_json(silent=True, force=True) or {}
     preset = body.get("preset", "mini")
     size = exam.PRESETS.get(preset)
     if size is None:
@@ -729,6 +749,29 @@ def gre_exam_form() -> bytes:
     _ = EXAM_MODE_MIN_STUDIED_PCT  # gate structure present; open pre-mastery-data
 
     items = exam.load_exam_items(partition="p0")
+
+    # Honest capacity gate: the firewalled held-out bank may not hold enough items
+    # to build this preset under the official 50/25/25 blueprint. Offer the largest
+    # mock it *can* build rather than failing after the user picks a size. (The
+    # client also disables infeasible presets via `greExamCapacity`; this is the
+    # defensive server-side guard.)
+    if not exam.size_is_feasible(items, size):
+        max_size = exam.max_feasible_size(items)
+        if max_size <= 0:
+            reason = (
+                "The held-out item bank can't build a blueprint-matched mock yet. "
+                "Add more items to the eval bank and reopen Exam Mode."
+            )
+        else:
+            reason = (
+                f"A {preset} mock needs {size} held-out items in the official "
+                f"50/25/25 blueprint; the firewalled bank can build at most "
+                f"{max_size} right now. Pick a shorter mock."
+            )
+        return json.dumps(
+            {"locked": True, "reason": reason, "max_feasible": max_size}
+        ).encode()
+
     seed = random.randrange(1, 2**31)
     try:
         form = exam.assemble_form(items, size, seed=seed)
@@ -768,7 +811,8 @@ def gre_exam_submit() -> bytes:
 
     from aqt.gre import exam
 
-    body = request.get_json(silent=True) or {}
+    # force=True: client posts Content-Type application/binary (see gre_exam_form).
+    body = request.get_json(silent=True, force=True) or {}
     preset = body.get("preset", "mini")
     seed = int(body.get("seed", 0))
     raw_answers = body.get("answers", {}) or {}
@@ -817,6 +861,7 @@ post_handler_list = [
     deck_options_ready,
     save_custom_colours,
     gre_dashboard_data,
+    gre_exam_capacity,
     gre_exam_form,
     gre_exam_submit,
 ]
