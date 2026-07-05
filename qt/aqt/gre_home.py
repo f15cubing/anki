@@ -193,6 +193,24 @@ def show_gre_home(mw: aqt.main.AnkiQt) -> None:
     _active = GreHome(mw)
 
 
+def handle_gre_home(mw: aqt.main.AnkiQt, caller: QDialog | None = None) -> None:
+    """Focus/open GRE Home, closing the calling dialog if it isn't Home itself.
+
+    The shared target of the ``gre:home`` webview bridge command fired by the
+    "← Home" link on the other GRE surfaces (dashboard / exam / method); wired via
+    ``aqt.gre.nav.install_gre_home_bridge``. Reuses the Home singleton
+    (``show_gre_home``); the caller — a QDialog that is never the live Home — is
+    closed so we don't leave a stack of windows behind.
+
+    The close is **deferred** (``QTimer.singleShot(0, …)``): this runs inside the
+    caller webview's own bridge callback, so tearing that webview down synchronously
+    here would free it mid-call.
+    """
+    show_gre_home(mw)
+    if caller is not None and caller is not _active:
+        QTimer.singleShot(0, caller.close)
+
+
 def _maybe_open_on_startup() -> None:
     mw = aqt.mw
     if mw is None or getattr(mw, "col", None) is None:

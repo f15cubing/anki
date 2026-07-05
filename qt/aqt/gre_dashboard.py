@@ -6,6 +6,7 @@ import sys
 
 import aqt
 import aqt.main
+from aqt.gre.nav import install_gre_home_bridge
 from aqt.qt import (
     QAction,
     QDialog,
@@ -41,6 +42,7 @@ class GreDashboard(QDialog):
         _write_scorecard(mw)
         disable_help_button(self)
         self.web = AnkiWebView(kind=AnkiWebViewKind.GRE_DASHBOARD)
+        install_gre_home_bridge(self.web, mw, self)
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)

@@ -10,12 +10,14 @@ the real vendored algorithm; everything else is static, technical prose.
 -->
 <script lang="ts">
     import CalibrationStrip from "../gre-dashboard/CalibrationStrip.svelte";
+    import GreHomeLink from "../gre-dashboard/GreHomeLink.svelte";
     import "../gre-dashboard/tokens.css";
     import Interleave from "./Interleave.svelte";
 </script>
 
 <div class="method">
     <header class="masthead">
+        <GreHomeLink />
         <span class="eyebrow">GRE · Mathematics Subject Test · study method</span>
         <h1>
             Built on FSRS.

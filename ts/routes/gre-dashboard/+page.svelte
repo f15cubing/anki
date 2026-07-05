@@ -8,6 +8,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import "./fonts.css";
     import "./tokens.css";
     import CoverageMap from "./CoverageMap.svelte";
+    import GreHomeLink from "./GreHomeLink.svelte";
     import MemoryPanel from "./MemoryPanel.svelte";
     import ScoreSlot from "./ScoreSlot.svelte";
 
@@ -49,6 +50,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <div class="gre-dashboard">
     <header class="masthead">
         <div class="titles">
+            <GreHomeLink />
             <span class="eyebrow">GRE · Mathematics Subject Test</span>
             <h1>Readiness</h1>
         </div>
