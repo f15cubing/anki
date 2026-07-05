@@ -75,6 +75,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     title="Performance"
                     state={vm.performance.state}
                     body={vm.performance.note}
+                    point={vm.performance.point ?? null}
+                    low={vm.performance.low ?? null}
+                    high={vm.performance.high ?? null}
+                    n={vm.performance.total ?? null}
                 />
                 <ScoreSlot
                     title="Readiness"

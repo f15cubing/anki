@@ -3,33 +3,66 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 -->
 <!--
-A single score slot. Redesign owns the chrome; the Thursday scoring layer owns
-what goes inside (it will drop a CalibrationStrip into the default slot when
-Performance/Readiness go live). The state guard keeps a fabricated number from
-ever slipping in: any state other than the two honest give-up states renders as
-"not available", never as a score.
+A single score slot. Redesign owns the chrome; the scoring layer owns what goes
+inside — when a score goes live it drops a CalibrationStrip (a range, never a
+bare point) into the slot. The state guard keeps a fabricated number from ever
+slipping in: the only states that render are the two honest give-up states and
+"observed", and "observed" renders a number ONLY when a real range payload
+(point + low + high) is present — otherwise it collapses to "not available".
 -->
 <script lang="ts">
-    const ALLOWED_STATES = new Set(["insufficient_evidence", "not_available"]);
+    import CalibrationStrip from "./CalibrationStrip.svelte";
+
+    const ALLOWED_STATES = new Set([
+        "insufficient_evidence",
+        "not_available",
+        "observed",
+    ]);
     const {
         title,
         state,
         body = "",
         reasons = [],
         bestNext = null,
+        point = null,
+        low = null,
+        high = null,
+        n = null,
     }: {
         title: string;
         state: string;
         body?: string;
         reasons?: string[];
         bestNext?: string | null;
+        point?: number | null;
+        low?: number | null;
+        high?: number | null;
+        n?: number | null;
     } = $props();
 
-    const safeState = $derived(ALLOWED_STATES.has(state) ? state : "not_available");
+    const hasRange = $derived(
+        typeof point === "number" &&
+            typeof low === "number" &&
+            typeof high === "number",
+    );
+    // "observed" only survives with a real range; anything else (incl. an
+    // "observed" state missing its range, or an unknown state) falls back to
+    // "not available" so a fabricated point can never slip in.
+    const safeState = $derived(
+        state === "observed"
+            ? hasRange
+                ? "observed"
+                : "not_available"
+            : ALLOWED_STATES.has(state)
+              ? state
+              : "not_available",
+    );
     const badge = $derived(
         safeState === "insufficient_evidence"
             ? "Insufficient evidence"
-            : "Not available yet",
+            : safeState === "observed"
+              ? "Observed"
+              : "Not available yet",
     );
     const leaf = (tag: string | null) => (tag ? tag.split("::").pop() : null);
 </script>
@@ -39,6 +72,10 @@ ever slipping in: any state other than the two honest give-up states renders as
         <span class="title">{title}</span>
         <span class="badge">{badge}</span>
     </div>
+
+    {#if safeState === "observed"}
+        <CalibrationStrip {point} {low} {high} {n} scale="pct" tone="signal" />
+    {/if}
 
     {#if body}
         <p class="body">{body}</p>
@@ -75,6 +112,10 @@ ever slipping in: any state other than the two honest give-up states renders as
         border-left: 3px solid var(--gre-abstain);
         background: var(--gre-abstain-weak);
     }
+    /* A live, observed score — a signal-toned left rule to match the range tick. */
+    .observed {
+        border-left: 3px solid var(--gre-signal);
+    }
     .head {
         display: flex;
         align-items: baseline;
@@ -96,6 +137,9 @@ ever slipping in: any state other than the two honest give-up states renders as
     }
     .insufficient_evidence .badge {
         color: var(--gre-abstain);
+    }
+    .observed .badge {
+        color: var(--gre-signal);
     }
     .body {
         margin: 0;
