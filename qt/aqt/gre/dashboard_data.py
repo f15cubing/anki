@@ -111,6 +111,71 @@ def _memory_cell(row) -> dict:
     }
 
 
+def load_exam_attempts(path: str | Path) -> list[dict]:
+    """Flatten the exam-results side-file into one pooled per-item attempts list.
+
+    The file (written by the Exam Mode submit handler) is JSON-lines: one object
+    per session, each with an ``attempts`` array of per-item records that carry a
+    boolean ``correct``. Best-effort: a missing/unreadable file or any malformed
+    line yields no rows rather than raising into the dashboard response path.
+    """
+    out: list[dict] = []
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return out
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(record, dict):
+            continue
+        for attempt in record.get("attempts", []) or []:
+            if isinstance(attempt, dict) and "correct" in attempt:
+                out.append(attempt)
+    return out
+
+
+def observed_performance(attempts: list[dict]) -> dict:
+    """Observed rights-only accuracy across timed exam items, as a range.
+
+    This is the *observed* Performance surface: the learner's measured accuracy
+    on our authored, ETS-firewalled practice items — honest at low n. It is
+    deliberately NOT the calibrated logistic+Platt projection from
+    ``scoring/performance.py`` (that model needs a multi-student attempt corpus;
+    fitting it on one learner's handful of attempts would look confident exactly
+    when it knows least). Honesty ceilings: always a range with ``n`` via the
+    Wilson score interval, never a bare point; with no attempts we report a
+    give-up state, never a fabricated 0.
+    """
+    graded = [a for a in attempts if isinstance(a, dict) and "correct" in a]
+    total = len(graded)
+    if total == 0:
+        return {
+            "state": "not_available",
+            "note": "Take a timed exam (Tools \u25b8 GRE exam mode) to measure performance.",
+        }
+    correct = sum(1 for a in graded if a["correct"])
+    point, low, high = wilson_interval(correct, total)
+    plural = "s" if total != 1 else ""
+    return {
+        "state": "observed",
+        "correct": correct,
+        "total": total,
+        "point": point,
+        "low": low,
+        "high": high,
+        "note": (
+            f"Observed accuracy across {total} timed item{plural} from your "
+            "authored practice bank (not ETS) \u2014 a range, not a projected score."
+        ),
+    }
+
+
 def next_best_topic(rows_by_tag: dict, tax: Taxonomy) -> str | None:
     leaves = [(b, leaf, leaf_tag(b.name, leaf, tax)) for b in tax.buckets for leaf in b.leaves]
     # 1) highest exam-weight uncovered leaf; ties -> taxonomy order
@@ -127,7 +192,9 @@ def next_best_topic(rows_by_tag: dict, tax: Taxonomy) -> str | None:
     return best_tag
 
 
-def build_view_model(rows_by_tag: dict, *, generated_at: str) -> dict:
+def build_view_model(
+    rows_by_tag: dict, *, generated_at: str, exam_attempts: list | None = None
+) -> dict:
     tax = load_taxonomy()
     # buckets
     bucket_vms, bucket_points = [], []
@@ -174,5 +241,5 @@ def build_view_model(rows_by_tag: dict, *, generated_at: str) -> dict:
             "next_best_topic": next_best_topic(rows_by_tag, tax),
             "reasons": reasons,
         },
-        "performance": {"state": "not_available", "note": "Arrives Thursday (MCQ surface)."},
+        "performance": observed_performance(exam_attempts or []),
     }
