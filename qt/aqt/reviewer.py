@@ -156,6 +156,10 @@ class Reviewer:
         self._recordedAudio: str | None = None
         self._combining: bool = True
         self.typeCorrect: str | None = None  # web init happens before this is set
+        # GRE: correctness of the current graded-MCQ tap ("right"/"wrong"/None),
+        # reported by the card template via a ``gremcq:`` bridge command. Drives the
+        # wrong-answer-only-Again lockdown (aqt.gre.mcq_lockdown). Reset per card.
+        self._gre_mcq_verdict: str | None = None
         self.state: Literal["question", "answer", "transition"] | None = None
         self._refresh_needed: RefreshNeeded | None = None
         self._v3: V3CardInfo | None = None
@@ -248,6 +252,7 @@ class Reviewer:
         self.previous_card = self.card
         self.card = None
         self._v3 = None
+        self._gre_mcq_verdict = None  # GRE: clear MCQ lockdown state for the new card
         self._get_next_v3_card()
 
         self._previous_card_info.set_card(self.previous_card)
@@ -270,7 +275,9 @@ class Reviewer:
         # review cards in memory (pure presentation; no scheduling/undo change).
         from aqt.gre.interleave_review import fetch_limit, reorder_output
 
-        output = self.mw.col.sched.get_queued_cards(fetch_limit=fetch_limit(self.mw.col))
+        output = self.mw.col.sched.get_queued_cards(
+            fetch_limit=fetch_limit(self.mw.col)
+        )
         if not output.cards:
             return
         reorder_output(self.mw.col, output)
@@ -550,6 +557,13 @@ class Reviewer:
         if not proceed:
             return
 
+        # GRE: a wrong graded-MCQ answer is a lapse — clamp any Hard/Good/Easy
+        # (button, keyboard, or auto-advance) to Again. No-op for correct MCQ and
+        # non-MCQ cards (verdict is None).
+        from aqt.gre.mcq_lockdown import clamp_ease
+
+        ease = cast(Literal[1, 2, 3, 4], clamp_ease(self._gre_mcq_verdict, ease))
+
         sched = cast(V3Scheduler, self.mw.col.sched)
         answer = sched.build_answer(
             card=self.card,
@@ -695,6 +709,13 @@ class Reviewer:
             self.mw.toolbarWeb.update_background_image()
         elif url == "statesMutated":
             self._states_mutated = True
+        elif url.startswith("gremcq:"):
+            # GRE: the graded-MCQ template reports the tapped option's correctness so
+            # a wrong answer can be locked to Again (see aqt.gre.mcq_lockdown). This is
+            # a state hint only — it never answers or advances the card.
+            from aqt.gre.mcq_lockdown import parse_verdict
+
+            self._gre_mcq_verdict = parse_verdict(url)
         else:
             print("unrecognized anki link:", url)
 
@@ -913,6 +934,11 @@ timerStopped = false;
         buttons_tuple = gui_hooks.reviewer_will_init_answer_buttons(
             buttons_tuple, self, self.card
         )
+        # GRE: after a wrong graded-MCQ tap, show only Again on the bottom bar (last
+        # word, so it holds regardless of add-on button tweaks). No-op otherwise.
+        from aqt.gre.mcq_lockdown import restrict_answer_buttons
+
+        buttons_tuple = restrict_answer_buttons(self._gre_mcq_verdict, buttons_tuple)
         return buttons_tuple
 
     def _answerButtons(self) -> str:

@@ -20,26 +20,44 @@ deck bundled under the OLD content-hash scheme can't be matched by GUID, so a
 one-time cleanup (`gre_deck_guid_scheme` gate) removes those legacy notes before
 the first uid import to avoid duplicating the whole deck.
 
-KNOWN LIMITATION (note-type template refresh on EXISTING installs): a bumped
-``GRE_DECK_VERSION`` re-triggers this import, and a FRESH install always gets the
-current bundled template. But because our ``.apkg`` build is byte-deterministic
-(fixed note-type ``mod``), ``update_notetypes=IF_NEWER`` sees the incoming
-note-type as "not newer" and keeps the existing template body — so a pure card-
-*template* change (e.g. the interactive MCQ template) does NOT reach installs that
-already imported an earlier bundle. ``ALWAYS`` was also verified not to force it
-(same-id merge keeps existing templates). Refreshing the template on existing
-installs is a separate follow-up (version-derived note-type ``mod``, or a template
-migration); it is out of scope for a content re-bundle.
+TEMPLATE REFRESH on EXISTING installs: the apkg importer keeps an existing
+note-type's *template body* on re-import (same-id merge — verified for both
+``IF_NEWER`` and ``ALWAYS``; our build is byte-deterministic with a fixed note-type
+``mod``, so "is it newer?" is always false). A pure card-*template* change (e.g. the
+graded / wrong-answer-locked MCQ template) would therefore never reach installs that
+imported an earlier bundle. We fix that independently of the deck version:
+``_refresh_bundled_notetype_templates`` reads the canonical ``qfmt``/``afmt``/``css``
+straight from the bundled ``.apkg`` (the single source, built from
+``pipeline/build_deck.py``) and writes them onto the live note types via
+``models.update_dict`` — a text-only update that touches no fields, ids, notes, or
+scheduling, so review history is preserved. It runs once per ``_TEMPLATE_REVISION``
+(a separate ``col.conf`` gate), so shipping a new template does not require
+re-importing the whole deck. A fresh install already has the current template, so the
+refresh is a harmless no-op there.
 """
 
 from __future__ import annotations
 
+import json
 import os
+import sqlite3
+import tempfile
+import zipfile
 
-from anki.collection import Collection, ImportAnkiPackageOptions, ImportAnkiPackageRequest
+from anki.collection import (
+    Collection,
+    ImportAnkiPackageOptions,
+    ImportAnkiPackageRequest,
+)
 from anki.import_export_pb2 import ImportAnkiPackageUpdateCondition
 
 GRE_DECK_VERSION = "2026-07-03b"
+
+# Bumped whenever the bundled note-type *templates* change without a deck-content
+# re-import (a pure qfmt/afmt/css edit). Gates the one-time in-place template refresh
+# below so existing installs pick up the new template on next launch.
+_TEMPLATE_REVISION = "2026-07-05a-mcq-graded-lockdown"
+_TEMPLATE_REVISION_KEY = "gre_deck_template_revision"
 
 _ASSET = os.path.join(os.path.dirname(__file__), "data", "gre-study-deck.apkg")
 _CONFIG_KEY = "gre_deck_version"
@@ -98,12 +116,103 @@ def _import_bundled(col: Collection) -> int:
         with_deck_configs=False,
     )
     before = col.card_count()
-    col.import_anki_package(
-        ImportAnkiPackageRequest(package_path=_ASSET, options=opts)
-    )
+    col.import_anki_package(ImportAnkiPackageRequest(package_path=_ASSET, options=opts))
     col.set_config(_CONFIG_KEY, GRE_DECK_VERSION)
     col.set_config(_GUID_SCHEME_KEY, _GUID_SCHEME)
     return col.card_count() - before
+
+
+def _bundled_models_json() -> dict | None:
+    """Read the note-type ``models`` JSON out of the bundled ``.apkg`` (or None).
+
+    The bundled deck is a legacy-schema package (``collection.anki2``/``.anki21``)
+    whose note types live in the ``col.models`` JSON blob. We copy that blob out of
+    the zip into a temp DB and read it read-only; any failure returns ``None`` so the
+    refresh degrades to a no-op rather than disrupting profile load.
+    """
+    try:
+        with zipfile.ZipFile(_ASSET) as zf:
+            names = set(zf.namelist())
+            db_name = next(
+                (n for n in ("collection.anki2", "collection.anki21") if n in names),
+                None,
+            )
+            if db_name is None:
+                return None
+            raw = zf.read(db_name)
+    except (OSError, zipfile.BadZipFile):
+        return None
+
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".anki2", delete=False) as fh:
+            fh.write(raw)
+            tmp = fh.name
+        con = sqlite3.connect(tmp)
+        try:
+            row = con.execute("SELECT models FROM col LIMIT 1").fetchone()
+        finally:
+            con.close()
+    except (OSError, sqlite3.DatabaseError):
+        return None
+    finally:
+        if tmp is not None:
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+    if not row or not row[0]:
+        return None
+    try:
+        return json.loads(row[0])
+    except (ValueError, TypeError):
+        return None
+
+
+def _refresh_bundled_notetype_templates(col: Collection) -> None:
+    """Overwrite the bundled note types' card templates + CSS in place.
+
+    Reads the canonical ``qfmt``/``afmt``/``css`` from the bundled ``.apkg`` and
+    applies them to the live note types (matched by name, templates matched by
+    ``ord``) via ``models.update_dict``. This is a *text-only* update: no fields,
+    ids, notes, or scheduling change, so the user's review history is untouched. Only
+    writes a note type that actually differs, so it's a no-op on a fresh install (or a
+    second run).
+    """
+    models_json = _bundled_models_json()
+    if not models_json:
+        return
+    by_name = {m.get("name"): m for m in models_json.values() if isinstance(m, dict)}
+    for name in _BUNDLED_NOTETYPES:
+        src = by_name.get(name)
+        if not src:
+            continue
+        nt = col.models.by_name(name)
+        if not nt:
+            continue
+        changed = False
+        css = src.get("css")
+        if css is not None and nt.get("css") != css:
+            nt["css"] = css
+            changed = True
+        src_tmpls = {t.get("ord"): t for t in src.get("tmpls", [])}
+        for tmpl in nt.get("tmpls", []):
+            s = src_tmpls.get(tmpl.get("ord"))
+            if not s:
+                continue
+            for key in ("qfmt", "afmt"):
+                new = s.get(key)
+                if new is not None and tmpl.get(key) != new:
+                    tmpl[key] = new
+                    changed = True
+        if changed:
+            col.models.update_dict(nt)
+
+
+def _templates_up_to_date(col: Collection) -> bool:
+    """True when the bundled-template revision has already been applied."""
+    return col.get_config(_TEMPLATE_REVISION_KEY, None) == _TEMPLATE_REVISION
 
 
 def _is_up_to_date(col: Collection) -> bool:
@@ -120,14 +229,21 @@ def _is_up_to_date(col: Collection) -> bool:
 
 
 def _run_if_needed(col: Collection) -> bool:
-    """Import only when the deck is not up-to-date (version or GUID scheme stale).
+    """Bring the bundled deck up to date: import stale content, refresh stale templates.
 
-    Returns True if an import was performed, False if already up-to-date.
+    Two independent gates: a stale version/GUID-scheme re-imports the deck content; a
+    stale template revision refreshes the note-type templates in place (no re-import
+    needed). Returns True if either ran, False if already fully up-to-date.
     """
-    if _is_up_to_date(col):
-        return False
-    _import_bundled(col)
-    return True
+    ran = False
+    if not _is_up_to_date(col):
+        _import_bundled(col)
+        ran = True
+    if not _templates_up_to_date(col):
+        _refresh_bundled_notetype_templates(col)
+        col.set_config(_TEMPLATE_REVISION_KEY, _TEMPLATE_REVISION)
+        ran = True
+    return ran
 
 
 def maybe_import_gre_deck(mw: object) -> None:
@@ -140,7 +256,7 @@ def maybe_import_gre_deck(mw: object) -> None:
     col = getattr(mw, "col", None)
     if col is None:
         return
-    if _is_up_to_date(col):
+    if _is_up_to_date(col) and _templates_up_to_date(col):
         return
 
     # QueryOp (not CollectionOp) is intentional: this one-time setup import is not
