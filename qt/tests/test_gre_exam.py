@@ -124,17 +124,22 @@ def test_feasible_presets_shape_and_flags():
     assert by_id["full"]["feasible"] is False
 
 
-def test_vendored_p0_only_supports_short_mocks():
-    # Regression for the Exam Mode API error: the vendored held-out (p0) bank is
-    # small, so only the mini preset is buildable — the larger presets must report
-    # infeasible up front instead of raising after the user picks one.
+def test_vendored_p0_supports_full_length_mock():
+    # The vendored held-out (p0) bank was enlarged with deterministic,
+    # firewall-safe demo items (`eval-p0-gen-*`, gen: generated) so Exam Mode can
+    # build the official full-length form under the 50/25/25 blueprint. Every
+    # named preset must therefore report feasible up front.
     items = exam.load_exam_items(partition="p0")
     flags = {p["id"]: p["feasible"] for p in exam.feasible_presets(items)}
     assert flags["mini"] is True
-    assert flags["full"] is False
-    assert flags["half"] is False
-    assert flags["third"] is False
-    assert exam.max_feasible_size(items) >= exam.PRESETS["mini"]
+    assert flags["third"] is True
+    assert flags["half"] is True
+    assert flags["full"] is True
+    assert exam.max_feasible_size(items) >= exam.PRESETS["full"]
+    # ...and a full 66-item form actually assembles, drawn only from the bank.
+    form = exam.assemble_form(items, exam.PRESETS["full"], seed=1)
+    assert len(form) == exam.PRESETS["full"]
+    assert all(str(it["id"]).startswith("eval-") for it in form)
 
 
 # --- scoring ---
