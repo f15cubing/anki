@@ -56,7 +56,7 @@ GRE_DECK_VERSION = "2026-07-03b"
 # Bumped whenever the bundled note-type *templates* change without a deck-content
 # re-import (a pure qfmt/afmt/css edit). Gates the one-time in-place template refresh
 # below so existing installs pick up the new template on next launch.
-_TEMPLATE_REVISION = "2026-07-05a-mcq-graded-lockdown"
+_TEMPLATE_REVISION = "2026-07-05b-readout-mcq"
 _TEMPLATE_REVISION_KEY = "gre_deck_template_revision"
 
 _ASSET = os.path.join(os.path.dirname(__file__), "data", "gre-study-deck.apkg")
