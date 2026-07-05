@@ -15,6 +15,35 @@ from pathlib import Path
 
 _TAXONOMY_PATH = Path(__file__).with_name("taxonomy.json")
 
+# Friendly display names for the 17 ETS leaf topics (PRD Appendix A). Leaf keys are
+# unique across buckets, so a flat map is sufficient. Presentation only — the tag
+# strings in taxonomy.json remain the source of truth (drift-guarded); this never
+# feeds a query. Anything missing falls back to a prettified key.
+LEAF_LABELS: dict[str, str] = {
+    "differential_single": "Single-variable differential calculus",
+    "integral_single": "Single-variable integral calculus",
+    "differential_multi": "Multivariable differential calculus",
+    "integral_multi": "Multivariable integral calculus",
+    "differential_equations": "Differential equations",
+    "applications": "Applications & coordinate geometry",
+    "elementary": "Elementary algebra",
+    "linear": "Linear algebra",
+    "abstract": "Abstract algebra",
+    "number_theory": "Number theory",
+    "real_analysis": "Introductory real analysis",
+    "discrete": "Discrete mathematics",
+    "topology": "General topology",
+    "geometry": "Geometry",
+    "complex": "Complex variables",
+    "probability_stats": "Probability & statistics",
+    "numerical": "Numerical analysis",
+}
+
+
+def leaf_label(leaf: str) -> str:
+    """Friendly name for a leaf key, falling back to a prettified key."""
+    return LEAF_LABELS.get(leaf) or leaf.replace("_", " ").capitalize()
+
 
 @dataclass(frozen=True)
 class Bucket:
@@ -192,6 +221,86 @@ def next_best_topic(rows_by_tag: dict, tax: Taxonomy) -> str | None:
     return best_tag
 
 
+def studied_coverage(rows_by_tag: dict, tax: Taxonomy) -> dict:
+    """Studied coverage over the leaf topics: {studied, total, pct}.
+
+    ``studied`` = leaf topics with >=1 graded review (matches the readiness gate's
+    coverage notion). This is the number the Exam-Mode 70% lock reads.
+    """
+    leaves = [leaf_tag(b.name, leaf, tax) for b in tax.buckets for leaf in b.leaves]
+    total = len(leaves)
+    studied = sum(1 for t in leaves if rows_by_tag[t].reviewed_count > 0)
+    return {"studied": studied, "total": total, "pct": (studied / total if total else 0.0)}
+
+
+def study_next(rows_by_tag: dict, tax: Taxonomy) -> dict | None:
+    """The single best **studyable** topic to review next (or None if the deck is empty).
+
+    Only considers leaves that actually have cards (so the "study next" button always
+    lands on something reviewable). Priority: (1) the highest exam-weight leaf you have
+    not studied yet (ties -> taxonomy order); (2) if all studyable leaves are studied,
+    your weakest one by Wilson lower bound. Returns a friendly, presentation-ready dict.
+    """
+    leaves = [
+        (b, leaf, leaf_tag(b.name, leaf, tax)) for b in tax.buckets for leaf in b.leaves
+    ]
+    studyable = [(b, leaf, tag) for (b, leaf, tag) in leaves if rows_by_tag[tag].total_cards > 0]
+    if not studyable:
+        return None
+
+    def cell(b, leaf, tag, reason):
+        return {"tag": tag, "bucket": b.name, "leaf": leaf, "label": leaf_label(leaf), "reason": reason}
+
+    uncovered = [(b, leaf, tag) for (b, leaf, tag) in studyable if rows_by_tag[tag].reviewed_count == 0]
+    if uncovered:
+        uncovered.sort(key=lambda x: -x[0].weight)  # stable -> taxonomy order in ties
+        b, leaf, tag = uncovered[0]
+        return cell(b, leaf, tag, "Highest-weight topic you haven't started yet.")
+
+    best = None  # (low, b, leaf, tag)
+    for (b, leaf, tag) in studyable:
+        _, low, _ = wilson_interval(rows_by_tag[tag].mastered_count, rows_by_tag[tag].reviewed_count)
+        if best is None or low < best[0]:
+            best = (low, b, leaf, tag)
+    _, b, leaf, tag = best
+    return cell(b, leaf, tag, "Your weakest studied topic — worth reinforcing.")
+
+
+def stats_block(rows_by_tag: dict, tax: Taxonomy, exam_attempts: list | None) -> dict:
+    """Compact study stats for the Home ("questions/cards reviewed").
+
+    Purely derived from the mastery rows (each card carries exactly one leaf tag, so
+    summing leaf rows counts distinct cards without double-counting) plus the exam
+    side-file — no new engine reads. ``exam_questions_answered`` is the count of graded
+    timed-exam items (the Performance surface), kept distinct from flashcard reviews.
+    """
+    leaf_tags = [leaf_tag(b.name, leaf, tax) for b in tax.buckets for leaf in b.leaves]
+    cards_total = sum(rows_by_tag[t].total_cards for t in leaf_tags)
+    cards_reviewed = sum(rows_by_tag[t].reviewed_count for t in leaf_tags)
+    cov = studied_coverage(rows_by_tag, tax)
+    graded = [a for a in (exam_attempts or []) if isinstance(a, dict) and "correct" in a]
+    by_bucket = []
+    for b in tax.buckets:
+        row = rows_by_tag[bucket_tag(b.name, tax)]
+        by_bucket.append(
+            {
+                "bucket": b.name,
+                "weight": b.weight,
+                "reviewed": row.reviewed_count,
+                "total": row.total_cards,
+            }
+        )
+    return {
+        "cards_reviewed": cards_reviewed,
+        "cards_total": cards_total,
+        "topics_covered": cov["studied"],
+        "topics_total": cov["total"],
+        "studied_pct": cov["pct"],
+        "exam_questions_answered": len(graded),
+        "by_bucket": by_bucket,
+    }
+
+
 def build_view_model(
     rows_by_tag: dict, *, generated_at: str, exam_attempts: list | None = None
 ) -> dict:
@@ -214,7 +323,7 @@ def build_view_model(
             if row.reviewed_count > 0:
                 studied += 1
             leaf_vms.append({
-                "tag": tag, "bucket": b.name, "leaf": leaf,
+                "tag": tag, "bucket": b.name, "leaf": leaf, "label": leaf_label(leaf),
                 "has_cards": row.total_cards > 0,
                 "studied": row.reviewed_count > 0,
                 "memory": _memory_cell(row) if row.reviewed_count > 0 else None,
@@ -242,4 +351,6 @@ def build_view_model(
             "reasons": reasons,
         },
         "performance": observed_performance(exam_attempts or []),
+        "stats": stats_block(rows_by_tag, tax, exam_attempts),
+        "study_next": study_next(rows_by_tag, tax),
     }

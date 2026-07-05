@@ -179,3 +179,28 @@ def test_attempts_record_shape():
     }
     assert rec["c1"]["correct"] is True and rec["c1"]["latency_s"] == 42.5
     assert rec["c2"]["correct"] is False and rec["x1"]["chosen"] is None
+
+
+# --- 70% studied-coverage lock (Home + Exam Mode) ---------------------------
+
+
+def test_coverage_meets_threshold_at_and_below_boundary():
+    assert exam.coverage_meets_threshold(7, 10) is True  # exactly 0.70
+    assert exam.coverage_meets_threshold(6, 10) is False  # 0.60
+    assert exam.coverage_meets_threshold(12, 17) is True  # 0.706 (>=12 of 17)
+    assert exam.coverage_meets_threshold(11, 17) is False  # 0.647
+    assert exam.coverage_meets_threshold(0, 0) is False  # no topics -> never
+
+
+def test_coverage_lock_reason_reports_progress_and_remaining():
+    # ceil(0.70 * 17) = 12 topics needed; studied 3 -> 9 more.
+    msg = exam.coverage_lock_reason(3, 17)
+    assert "70%" in msg
+    assert "3" in msg  # studied count
+    assert "9 more" in msg
+
+
+def test_coverage_lock_reason_singular_when_one_remaining():
+    # 11/17 studied (64%), needs 12 -> exactly 1 more.
+    assert "1 more topic" in exam.coverage_lock_reason(11, 17)
+    assert "1 more topics" not in exam.coverage_lock_reason(11, 17)

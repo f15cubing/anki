@@ -45,6 +45,16 @@ server-side (the client never receives the keys during the exam).
     // Until this loads, presets stay enabled and the server guards each request.
     let presetInfo = $state<Record<string, { feasible: boolean; items: number }>>({});
     let maxFeasible = $state<number | null>(null);
+    // Exam Mode is gated to >=70% studied topic coverage (PRD §8a). Until this loads
+    // it stays null and the presets show; the server also guards every start.
+    let coverage = $state<{
+        studied: number;
+        total: number;
+        pct: number;
+        threshold: number;
+        unlocked: boolean;
+        reason?: string;
+    } | null>(null);
 
     let timerId: ReturnType<typeof setInterval> | null = null;
 
@@ -95,6 +105,7 @@ server-side (the client never receives the keys during the exam).
             }
             presetInfo = map;
             maxFeasible = cap.max_feasible ?? null;
+            coverage = cap.coverage ?? null;
         } catch (e) {
             // Non-fatal: leave every preset enabled; the server guards each start.
         }
@@ -169,38 +180,71 @@ server-side (the client never receives the keys during the exam).
             <span class="eyebrow">GRE · Mathematics Subject Test</span>
             <h1>Exam Mode</h1>
         </header>
-        <p class="lede">
-            A faithful, timed mock: five options, one global clock, mark &amp; review,
-            no calculator, no pause — auto-submits at zero. Every form is
-            blueprint-matched (≈50% calculus / 25% algebra / 25% additional) and drawn
-            only from the held-out item bank.
-        </p>
-        <div class="presets">
-            {#each PRESETS as p}
-                {@const info = presetInfo[p.id]}
-                {@const feasible = info ? info.feasible : true}
-                <button
-                    type="button"
-                    class="preset"
-                    class:unavailable={info && !feasible}
-                    disabled={info ? !feasible : false}
-                    onclick={() => startExam(p.id)}
-                >
-                    <span class="p-label">{p.label}</span>
-                    <span class="p-meta">{p.items} items · {p.time}</span>
-                    {#if info && !feasible}
-                        <span class="p-note">not enough held-out items yet</span>
-                    {/if}
-                </button>
-            {/each}
-        </div>
-        {#if maxFeasible !== null}
-            <p class="capacity-note">
-                The firewalled held-out bank can currently fill a blueprint-matched mock
-                of up to <strong>{maxFeasible}</strong>
-                 items — longer presets unlock as the bank grows. Every mock keeps the official
-                pace (~2.58 min/item).
+        {#if coverage && !coverage.unlocked}
+            <div class="locked">
+                <div class="lock-head">
+                    <span class="lock-icon">🔒</span>
+                    <span class="lock-title">Exam Mode is locked</span>
+                </div>
+                <p class="lock-reason">
+                    {coverage.reason ??
+                        "Study more of the exam's topics to unlock a timed mock."}
+                </p>
+                <div class="cov-bar" aria-hidden="true">
+                    <div
+                        class="cov-fill"
+                        style="width:{Math.min(100, Math.round(coverage.pct * 100))}%"
+                    ></div>
+                    <div
+                        class="cov-target"
+                        style="left:{Math.round(coverage.threshold * 100)}%"
+                    ></div>
+                </div>
+                <p class="cov-legend">
+                    <strong>
+                        {coverage.studied}/{coverage.total} topics ({Math.round(
+                            coverage.pct * 100,
+                        )}%)
+                    </strong>
+                    studied · unlocks at {Math.round(coverage.threshold * 100)}%. A
+                    timed mock helps prepared learners and wastes under-prepared ones —
+                    so study first (Tools ▸ GRE Home ▸ “Study next”), then come back.
+                </p>
+            </div>
+        {:else}
+            <p class="lede">
+                A faithful, timed mock: five options, one global clock, mark &amp;
+                review, no calculator, no pause — auto-submits at zero. Every form is
+                blueprint-matched (≈50% calculus / 25% algebra / 25% additional) and
+                drawn only from the held-out item bank.
             </p>
+            <div class="presets">
+                {#each PRESETS as p}
+                    {@const info = presetInfo[p.id]}
+                    {@const feasible = info ? info.feasible : true}
+                    <button
+                        type="button"
+                        class="preset"
+                        class:unavailable={info && !feasible}
+                        disabled={info ? !feasible : false}
+                        onclick={() => startExam(p.id)}
+                    >
+                        <span class="p-label">{p.label}</span>
+                        <span class="p-meta">{p.items} items · {p.time}</span>
+                        {#if info && !feasible}
+                            <span class="p-note">not enough held-out items yet</span>
+                        {/if}
+                    </button>
+                {/each}
+            </div>
+            {#if maxFeasible !== null}
+                <p class="capacity-note">
+                    The firewalled held-out bank can currently fill a blueprint-matched
+                    mock of up to <strong>{maxFeasible}</strong>
+                    items — longer presets unlock as the bank grows. Every mock keeps the
+                    official pace (~2.58 min/item).
+                </p>
+            {/if}
         {/if}
     {:else if phase === "loading"}
         <div class="notice">Preparing…</div>
@@ -406,6 +450,70 @@ server-side (the client never receives the keys during the exam).
         line-height: 1.5;
     }
     .capacity-note strong {
+        font-family: var(--gre-mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--gre-ink);
+    }
+    .locked {
+        margin-top: 1.5rem;
+        padding: 1.3rem 1.4rem;
+        border: 1px solid var(--gre-abstain);
+        border-left: 4px solid var(--gre-abstain);
+        border-radius: var(--gre-radius);
+        background: var(--gre-abstain-weak);
+        max-width: 640px;
+    }
+    .lock-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .lock-icon {
+        font-size: 1.1rem;
+    }
+    .lock-title {
+        font-family: var(--gre-mono);
+        font-size: 0.8rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--gre-abstain);
+        font-weight: 600;
+    }
+    .lock-reason {
+        margin: 0.7rem 0 1rem;
+        color: var(--gre-ink);
+        line-height: 1.5;
+    }
+    .cov-bar {
+        position: relative;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--gre-surface-sunk);
+        border: 1px solid var(--gre-hairline);
+        overflow: hidden;
+    }
+    .cov-fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        background: var(--gre-abstain-band);
+        border-right: 2px solid var(--gre-abstain);
+    }
+    .cov-target {
+        position: absolute;
+        top: -2px;
+        bottom: -2px;
+        width: 2px;
+        background: var(--gre-ink);
+    }
+    .cov-legend {
+        margin: 0.7rem 0 0;
+        font-size: 0.85rem;
+        color: var(--gre-muted);
+        line-height: 1.5;
+    }
+    .cov-legend strong {
         font-family: var(--gre-mono);
         font-variant-numeric: tabular-nums;
         color: var(--gre-ink);

@@ -98,6 +98,15 @@ from aqt.webview import AnkiWebView, AnkiWebViewKind
 install_pylib_legacy()
 
 
+def _add_gre_home_menu() -> None:
+    from aqt.gre_home import setup_gre_home_menu
+
+    setup_gre_home_menu(aqt.mw)
+
+
+gui_hooks.main_window_did_init.append(_add_gre_home_menu)
+
+
 def _add_gre_dashboard_menu() -> None:
     from aqt.gre_dashboard import setup_gre_dashboard_menu
 

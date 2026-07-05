@@ -59,6 +59,7 @@ class AnkiWebViewKind(Enum):
     FIELDS = "fields"
     IMPORT_LOG = "import log"
     IMPORT_ANKI_PACKAGE = "anki package import"
+    GRE_HOME = "GRE home"
     GRE_DASHBOARD = "GRE readiness dashboard"
     GRE_EXAM = "GRE exam mode"
     GRE_METHOD = "GRE study method"
@@ -145,6 +146,7 @@ class AnkiWebPage(QWebEnginePage):
             AnkiWebViewKind.IMPORT_ANKI_PACKAGE,
             AnkiWebViewKind.IMPORT_CSV,
             AnkiWebViewKind.IMPORT_LOG,
+            AnkiWebViewKind.GRE_HOME,
             AnkiWebViewKind.GRE_DASHBOARD,
             AnkiWebViewKind.GRE_EXAM,
             AnkiWebViewKind.GRE_METHOD,

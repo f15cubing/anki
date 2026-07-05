@@ -29,6 +29,35 @@ PRESETS = {"full": 66, "half": 33, "third": 22, "mini": 11}
 # ETS content blueprint.
 BLUEPRINT = {"calculus": 0.50, "algebra": 0.25, "additional": 0.25}
 
+# Timed Exam Mode is mastery-gated (PRD §8a): a timed mock helps prepared learners and
+# wastes under-prepared ones, so it stays locked until the learner has studied enough of
+# the exam. "Studied coverage" = fraction of the 17 ETS leaf topics with >=1 graded
+# review (see dashboard_data.studied_coverage). Independent of the readiness give-up gate.
+MIN_STUDIED_COVERAGE = 0.70
+
+
+def coverage_meets_threshold(
+    studied: int, total: int, threshold: float = MIN_STUDIED_COVERAGE
+) -> bool:
+    """True iff studied/total >= threshold. Zero topics is never unlocked."""
+    if total <= 0:
+        return False
+    return (studied / total) >= threshold
+
+
+def coverage_lock_reason(
+    studied: int, total: int, threshold: float = MIN_STUDIED_COVERAGE
+) -> str:
+    """Friendly explanation of why Exam Mode is locked and what unlocks it."""
+    pct = round((studied / total) * 100) if total else 0
+    need = math.ceil(threshold * total) if total else 0
+    remaining = max(0, need - studied)
+    return (
+        f"Exam Mode unlocks once you've studied {round(threshold * 100)}% of the "
+        f"{total} exam topics. You've studied {studied} ({pct}%) — study "
+        f"{remaining} more topic{'s' if remaining != 1 else ''} to start a timed mock."
+    )
+
 
 class InsufficientItemsError(ValueError):
     """The bank cannot satisfy the requested blueprint for this size."""

@@ -396,6 +396,7 @@ def is_sveltekit_page(path: str) -> bool:
         "import-csv",
         "import-page",
         "image-occlusion",
+        "gre-home",
         "gre-dashboard",
         "gre-exam",
         "gre-method",
@@ -675,32 +676,63 @@ def save_custom_colours() -> bytes:
     return b""
 
 
-def gre_dashboard_data() -> bytes:
-    # Read-only: calls the W1 MasteryQuery read RPC and returns a computed
-    # view-model as JSON. No mutation, no OpChanges (see dashboard_data). Also
-    # reads (never writes) the Exam Mode attempts side-file to surface observed
-    # Performance; best-effort so a missing/unreadable file never breaks load.
-    import json
+def _gre_dashboard_vm(rows_by_tag: dict) -> dict:
+    # Build the read-only dashboard view-model from pre-fetched mastery rows +
+    # the Exam Mode attempts side-file (read, never written). Shared by the
+    # dashboard and Home endpoints so both compute an identical view-model.
     import os
     from datetime import datetime, timezone
 
     from aqt.gre import dashboard_data as dd
 
-    topics = dd.query_topics()
-    rows = aqt.mw.col.mastery_query(topics)
-    rows_by_tag = {r.topic: r for r in rows}
     attempts: list = []
     try:
         folder = aqt.mw.pm.profileFolder()
         attempts = dd.load_exam_attempts(os.path.join(folder, "gre_exam_results.jsonl"))
     except Exception:
         attempts = []
-    vm = dd.build_view_model(
+    return dd.build_view_model(
         rows_by_tag,
         generated_at=datetime.now(timezone.utc).isoformat(),
         exam_attempts=attempts,
     )
-    return json.dumps(vm).encode("utf-8")
+
+
+def gre_dashboard_data() -> bytes:
+    # Read-only: calls the W1 MasteryQuery read RPC and returns a computed
+    # view-model as JSON. No mutation, no OpChanges (see dashboard_data). Also
+    # reads (never writes) the Exam Mode attempts side-file to surface observed
+    # Performance; best-effort so a missing/unreadable file never breaks load.
+    import json
+
+    from aqt.gre import dashboard_data as dd
+
+    rows_by_tag = {r.topic: r for r in aqt.mw.col.mastery_query(dd.query_topics())}
+    return json.dumps(_gre_dashboard_vm(rows_by_tag)).encode("utf-8")
+
+
+def gre_home_data() -> bytes:
+    # Read-only: one composed payload for the friendly Home landing page — the
+    # same dashboard view-model (three separated scores + study stats + the
+    # next-best studyable topic), the Exam-Mode coverage/lock state, and the
+    # startup-toggle flag. One mastery RPC call, reused for both the view-model
+    # and coverage. No mutation, no OpChanges.
+    import json
+
+    from aqt.gre import dashboard_data as dd
+
+    rows_by_tag = {r.topic: r for r in aqt.mw.col.mastery_query(dd.query_topics())}
+    cov = dd.studied_coverage(rows_by_tag, dd.load_taxonomy())
+    try:
+        show_on_startup = bool(aqt.mw.col.get_config("gre_home_show_on_startup", True))
+    except Exception:
+        show_on_startup = True
+    payload = {
+        "dashboard": _gre_dashboard_vm(rows_by_tag),
+        "exam": _coverage_block(cov),
+        "show_on_startup": show_on_startup,
+    }
+    return json.dumps(payload).encode("utf-8")
 
 
 def _persist_exam_attempts(records: list) -> None:
@@ -719,10 +751,46 @@ def _persist_exam_attempts(records: list) -> None:
         pass
 
 
+def _gre_studied_coverage() -> dict:
+    # Read-only studied coverage over the 17 leaf topics via the W1 mastery RPC.
+    # Shared by the Exam-Mode capacity report and the 70% lock (no mutation, no
+    # OpChanges). Best-effort: any failure reports zero coverage (stays locked).
+    from aqt.gre import dashboard_data as dd
+
+    try:
+        rows = {r.topic: r for r in aqt.mw.col.mastery_query(dd.query_topics())}
+        return dd.studied_coverage(rows, dd.load_taxonomy())
+    except Exception:
+        return {"studied": 0, "total": 17, "pct": 0.0}
+
+
+def _coverage_block(cov: dict) -> dict:
+    # Shape the Exam-Mode lock state (setup screen + Home) from a coverage dict.
+    from aqt.gre import exam
+
+    unlocked = exam.coverage_meets_threshold(cov["studied"], cov["total"])
+    block = {
+        "studied": cov["studied"],
+        "total": cov["total"],
+        "pct": cov["pct"],
+        "threshold": exam.MIN_STUDIED_COVERAGE,
+        "unlocked": unlocked,
+    }
+    if not unlocked:
+        block["reason"] = exam.coverage_lock_reason(cov["studied"], cov["total"])
+    return block
+
+
+def _gre_coverage_block() -> dict:
+    # The Exam-Mode lock state, computing its own coverage (own mastery RPC call).
+    return _coverage_block(_gre_studied_coverage())
+
+
 def gre_exam_capacity() -> bytes:
     # Read-only: report which presets the firewalled held-out bank can actually
-    # build right now, so the setup screen offers only feasible mocks instead of
-    # letting the user pick one that fails. Never touches the collection.
+    # build right now (so the setup screen offers only feasible mocks) plus the
+    # studied-coverage lock state (Exam Mode is gated to >=70% topic coverage).
+    # Never touches the collection.
     import json
 
     from aqt.gre import exam
@@ -733,6 +801,7 @@ def gre_exam_capacity() -> bytes:
             "presets": exam.feasible_presets(items),
             "max_feasible": exam.max_feasible_size(items),
             "pools": exam.bucket_pool_sizes(items),
+            "coverage": _gre_coverage_block(),
         }
     ).encode()
 
@@ -755,10 +824,13 @@ def gre_exam_form() -> bytes:
             {"locked": True, "reason": f"Unknown preset {preset!r}."}
         ).encode()
 
-    # Mastery gate (PRD §8a): timed mode is mastery-gated. Threshold kept at 0.0
-    # for now (no mastery data early); raise EXAM_MODE_MIN_STUDIED_PCT to gate.
-    EXAM_MODE_MIN_STUDIED_PCT = 0.0
-    _ = EXAM_MODE_MIN_STUDIED_PCT  # gate structure present; open pre-mastery-data
+    # Mastery gate (PRD §8a): timed mode unlocks only at >=70% studied topic coverage.
+    # Enforced server-side (the client also disables the presets via greExamCapacity).
+    coverage = _gre_coverage_block()
+    if not coverage["unlocked"]:
+        return json.dumps(
+            {"locked": True, "reason": coverage["reason"], "coverage": coverage}
+        ).encode()
 
     items = exam.load_exam_items(partition="p0")
 
@@ -892,6 +964,7 @@ post_handler_list = [
     deck_options_require_close,
     deck_options_ready,
     save_custom_colours,
+    gre_home_data,
     gre_dashboard_data,
     gre_exam_capacity,
     gre_exam_form,

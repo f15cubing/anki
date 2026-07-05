@@ -236,3 +236,117 @@ def test_load_then_observe_end_to_end(tmp_path):
     )
     out = dd.observed_performance(dd.load_exam_attempts(str(p)))
     assert (out["state"], out["correct"], out["total"]) == ("observed", 2, 3)
+
+
+# --- Home additions: coverage, study-next, stats, labels --------------------
+
+
+def test_leaf_label_known_and_prettified_fallback():
+    assert dd.leaf_label("integral_single") == "Single-variable integral calculus"
+    assert dd.leaf_label("mystery_leaf") == "Mystery leaf"
+
+
+def test_studied_coverage_counts_leaves_with_reviews():
+    cov = dd.studied_coverage(
+        _rows(
+            **{
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=3, mastered_count=2
+                ),
+                "topic::algebra::linear": FakeRow(total_cards=4, reviewed_count=0),
+            }
+        ),
+        dd.load_taxonomy(),
+    )
+    assert cov["studied"] == 1
+    assert cov["total"] == 17
+    assert cov["pct"] == pytest.approx(1 / 17)
+
+
+def test_study_next_none_when_no_cards():
+    assert dd.study_next(_rows(), dd.load_taxonomy()) is None
+
+
+def test_study_next_prefers_highest_weight_unstudied_with_cards():
+    nxt = dd.study_next(
+        _rows(
+            **{
+                "topic::algebra::linear": FakeRow(total_cards=4, reviewed_count=0),
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=0
+                ),
+            }
+        ),
+        dd.load_taxonomy(),
+    )
+    assert nxt["tag"] == "topic::calculus::integral_single"
+    assert nxt["label"] == "Single-variable integral calculus"
+    assert "haven't started" in nxt["reason"]
+
+
+def test_study_next_weakest_when_all_studyable_are_studied():
+    nxt = dd.study_next(
+        _rows(
+            **{
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=10, mastered_count=9
+                ),
+                "topic::algebra::linear": FakeRow(
+                    total_cards=5, reviewed_count=10, mastered_count=1
+                ),
+            }
+        ),
+        dd.load_taxonomy(),
+    )
+    assert nxt["tag"] == "topic::algebra::linear"
+    assert "weakest" in nxt["reason"].lower()
+
+
+def test_stats_block_sums_leaves_and_counts_exam_answers():
+    s = dd.stats_block(
+        _rows(
+            **{
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=3, mastered_count=2
+                ),
+                "topic::algebra::linear": FakeRow(
+                    total_cards=4, reviewed_count=1, mastered_count=0
+                ),
+                "topic::calculus": FakeRow(total_cards=5, reviewed_count=3),
+                "topic::algebra": FakeRow(total_cards=4, reviewed_count=1),
+            }
+        ),
+        dd.load_taxonomy(),
+        [{"correct": True}, {"correct": False}, {"nope": 1}],
+    )
+    assert s["cards_total"] == 9
+    assert s["cards_reviewed"] == 4
+    assert s["topics_covered"] == 2
+    assert s["topics_total"] == 17
+    assert s["exam_questions_answered"] == 2
+    by_bucket = {b["bucket"]: b for b in s["by_bucket"]}
+    assert by_bucket["calculus"]["reviewed"] == 3
+    assert by_bucket["additional"]["reviewed"] == 0
+
+
+def test_build_view_model_includes_stats_study_next_and_leaf_labels():
+    vm = dd.build_view_model(
+        _rows(
+            **{
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=0
+                )
+            }
+        ),
+        generated_at="t",
+    )
+    assert vm["stats"]["cards_total"] == 5
+    assert vm["study_next"]["tag"] == "topic::calculus::integral_single"
+    labels = {leaf["tag"]: leaf["label"] for leaf in vm["coverage"]["leaves"]}
+    assert labels["topic::calculus::integral_single"] == "Single-variable integral calculus"
+
+
+def test_build_view_model_study_next_none_on_empty_deck():
+    vm = dd.build_view_model(_rows(), generated_at="t")
+    assert vm["study_next"] is None
+    assert vm["stats"]["cards_reviewed"] == 0
