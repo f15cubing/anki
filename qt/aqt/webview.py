@@ -61,6 +61,7 @@ class AnkiWebViewKind(Enum):
     IMPORT_ANKI_PACKAGE = "anki package import"
     GRE_DASHBOARD = "GRE readiness dashboard"
     GRE_EXAM = "GRE exam mode"
+    GRE_METHOD = "GRE study method"
 
 
 class AuthInterceptor(QWebEngineUrlRequestInterceptor):
@@ -146,6 +147,7 @@ class AnkiWebPage(QWebEnginePage):
             AnkiWebViewKind.IMPORT_LOG,
             AnkiWebViewKind.GRE_DASHBOARD,
             AnkiWebViewKind.GRE_EXAM,
+            AnkiWebViewKind.GRE_METHOD,
         )
 
         global _profile_with_api_access, _profile_without_api_access

@@ -398,6 +398,7 @@ def is_sveltekit_page(path: str) -> bool:
         "image-occlusion",
         "gre-dashboard",
         "gre-exam",
+        "gre-method",
     ]
 
 
@@ -851,6 +852,19 @@ def gre_exam_submit() -> bytes:
     return json.dumps(result).encode()
 
 
+def gre_method_interleave() -> bytes:
+    # Read-only: runs the vendored FSRS-cooperative interleaving algorithm on a fixed
+    # example queue for the "how this differs from FSRS" explainer page. Pure — it never
+    # touches the collection (no col access, no OpChanges); k/w are clamped downstream.
+    import json
+
+    from aqt.gre import method_data
+
+    body = request.get_json(silent=True, force=True) or {}
+    demo = method_data.build_interleave_demo(k=body.get("k"), w=body.get("w"))
+    return json.dumps(demo).encode("utf-8")
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -871,6 +885,7 @@ post_handler_list = [
     gre_exam_capacity,
     gre_exam_form,
     gre_exam_submit,
+    gre_method_interleave,
 ]
 
 
