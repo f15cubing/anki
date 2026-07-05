@@ -43,6 +43,25 @@ def parse_verdict(url: str) -> str | None:
     return value if value in (RIGHT, WRONG) else None
 
 
+def should_reveal_synchronously(verdict: str | None, state: str | None) -> bool:
+    """Whether an ``ans`` bridge command must reveal the answer *synchronously*.
+
+    The graded MCQ template grades in one tap: after the learner picks an option
+    (which records ``verdict`` via ``gremcq:right``/``gremcq:wrong``), the in-card
+    rating fires ``pycmd("ans")`` then ``pycmd("ease<N>")`` back to back. The normal
+    ``ans`` path reveals the answer *asynchronously* (``evalWithCallback``), so
+    ``state`` is still ``"question"`` when the ``ease`` grade arrives and
+    ``_answerCard`` silently drops it (it requires ``state == "answer"``) — the
+    learner then has to grade a second time on the built-in bottom bar.
+
+    When a verdict is already recorded and we're still on the question, the reviewer
+    must reveal synchronously so ``state`` is ``"answer"`` before the grade lands.
+    Non-MCQ ``ans`` (no verdict → ``None``) keeps the normal async reveal, and a card
+    already past the question needs nothing special.
+    """
+    return verdict is not None and state == "question"
+
+
 def is_locked(verdict: str | None) -> bool:
     """Whether grading is locked to Again — only after a *wrong* MCQ answer."""
     return verdict == WRONG

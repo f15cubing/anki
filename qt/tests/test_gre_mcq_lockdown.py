@@ -25,6 +25,7 @@ from aqt.gre.mcq_lockdown import (
     is_locked,
     parse_verdict,
     restrict_answer_buttons,
+    should_reveal_synchronously,
 )
 
 FOUR = ((1, "Again"), (2, "Hard"), (3, "Good"), (4, "Easy"))
@@ -70,6 +71,24 @@ def test_restrict_answer_buttons_never_blanks_the_bar():
     # Defensive: a bar with no ease-1 entry is returned unchanged, not emptied.
     weird = ((2, "Hard"), (3, "Good"))
     assert restrict_answer_buttons("wrong", weird) == weird
+
+
+def test_should_reveal_synchronously_only_for_graded_mcq_on_question():
+    # Option tapped (verdict recorded) + still on the question → the one-tap grade
+    # needs a synchronous reveal so the following ease isn't dropped.
+    assert should_reveal_synchronously("right", "question") is True
+    assert should_reveal_synchronously("wrong", "question") is True
+    # Non-MCQ (no verdict) keeps the normal async type-answer reveal.
+    assert should_reveal_synchronously(None, "question") is False
+
+
+def test_should_reveal_synchronously_noop_once_past_the_question():
+    # Already revealed / mid-transition / uninitialised → nothing special to do,
+    # for both graded MCQ and non-MCQ cards.
+    for state in ("answer", "transition", None):
+        assert should_reveal_synchronously("right", state) is False
+        assert should_reveal_synchronously("wrong", state) is False
+        assert should_reveal_synchronously(None, state) is False
 
 
 # --- bundled-template refresh (deck_autoimport) ------------------------------

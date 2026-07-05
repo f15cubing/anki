@@ -695,7 +695,18 @@ class Reviewer:
 
     def _linkHandler(self, url: str) -> None:
         if url == "ans":
-            self._getTypedAnswer()
+            # GRE: a graded MCQ grades in one tap — the in-card rating fires
+            # pycmd("ans") then pycmd("ease<N>") back to back. The normal reveal is
+            # async (evalWithCallback), so without this the ease grade arrives while
+            # state is still "question" and _answerCard drops it (forcing a second
+            # grade on the bottom bar). Reveal synchronously when a verdict is already
+            # recorded so the following ease lands. Non-MCQ keeps the async path.
+            from aqt.gre.mcq_lockdown import should_reveal_synchronously
+
+            if should_reveal_synchronously(self._gre_mcq_verdict, self.state):
+                self._showAnswer()
+            else:
+                self._getTypedAnswer()
         elif url.startswith("ease"):
             val: Literal[1, 2, 3, 4] = int(url[4:])  # type: ignore
             self._answerCard(val)
