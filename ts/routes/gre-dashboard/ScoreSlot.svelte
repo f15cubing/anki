@@ -48,22 +48,19 @@ slipping in: the only states that render are the two honest give-up states and
     // "observed" only survives with a real range; anything else (incl. an
     // "observed" state missing its range, or an unknown state) falls back to
     // "not available" so a fabricated point can never slip in.
-    const safeState = $derived(
-        state === "observed"
-            ? hasRange
-                ? "observed"
-                : "not_available"
-            : ALLOWED_STATES.has(state)
-              ? state
-              : "not_available",
-    );
-    const badge = $derived(
-        safeState === "insufficient_evidence"
-            ? "Insufficient evidence"
-            : safeState === "observed"
-              ? "Observed"
-              : "Not available yet",
-    );
+    function resolveState(s: string, hasR: boolean): string {
+        if (s === "observed") {
+            return hasR ? "observed" : "not_available";
+        }
+        return ALLOWED_STATES.has(s) ? s : "not_available";
+    }
+    const safeState = $derived(resolveState(state, hasRange));
+    const BADGES: Record<string, string> = {
+        insufficient_evidence: "Insufficient evidence",
+        observed: "Observed",
+        not_available: "Not available yet",
+    };
+    const badge = $derived(BADGES[safeState] ?? "Not available yet");
     const leaf = (tag: string | null) => (tag ? tag.split("::").pop() : null);
 </script>
 
@@ -123,8 +120,11 @@ slipping in: the only states that render are the two honest give-up states and
         gap: 0.5rem;
     }
     .title {
-        font-size: var(--gre-fs-figure);
+        font-family: var(--gre-mono);
+        font-size: 0.7rem;
         font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
         color: var(--gre-ink);
     }
     .badge {

@@ -5,6 +5,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 <script lang="ts">
     import { onMount } from "svelte";
 
+    import "./fonts.css";
     import "./tokens.css";
     import CoverageMap from "./CoverageMap.svelte";
     import MemoryPanel from "./MemoryPanel.svelte";
@@ -99,7 +100,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <style>
     :global(body) {
-        background: var(--gre-surface-sunk);
+        background: var(--gre-canvas);
     }
     .gre-dashboard {
         max-width: 940px;
@@ -115,27 +116,28 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         gap: 1rem;
         padding-bottom: 1.1rem;
         margin-bottom: 1.4rem;
-        border-bottom: 2px solid var(--gre-ink);
+        border-bottom: 1px solid var(--gre-hairline);
     }
     .eyebrow {
         font-family: var(--gre-mono);
         font-size: var(--gre-fs-eyebrow);
-        letter-spacing: 0.12em;
+        letter-spacing: 0.24em;
         text-transform: uppercase;
-        color: var(--gre-signal);
+        color: var(--gre-muted);
     }
     h1 {
-        margin: 0.15rem 0 0;
-        font-size: 2rem;
+        margin: 0.2rem 0 0;
+        font-family: var(--gre-mono);
+        font-size: var(--gre-fs-title);
         font-weight: 700;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.03em;
         line-height: 1;
     }
     .updated {
         font-family: var(--gre-mono);
         font-variant-numeric: tabular-nums;
-        font-size: 0.75rem;
-        color: var(--gre-muted);
+        font-size: 0.72rem;
+        color: var(--gre-faint);
         white-space: nowrap;
     }
     .stack {

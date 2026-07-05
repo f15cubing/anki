@@ -29,7 +29,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             You can reliably recall about <strong>{pct(h.point)}</strong>
             of what you've studied.
         </p>
-        <CalibrationStrip point={h.point} low={h.low} high={h.high} n={totalReviewed} />
+        <CalibrationStrip
+            point={h.point}
+            low={h.low}
+            high={h.high}
+            n={totalReviewed}
+            method="Wilson"
+        />
         {#if h.buckets_reflected < h.buckets_total}
             <p class="caveat">
                 Headline reflects {h.buckets_reflected} of {h.buckets_total} exam areas —

@@ -1,0 +1,43 @@
+/* Copyright: Ankitects Pty Ltd and contributors
+ * License: GNU AGPL, version 3 or later, http://www.gnu.org/licenses/agpl.html */
+
+/* Bundled locally so the "Readout" identity works fully offline (no CDN, per the
+ * redesign brief §5). Both faces are SIL Open Font License — see the OFL text in
+ * ./fonts/JetBrainsMono-OFL.txt and ./fonts/Inter-OFL.txt. Only the weights the
+ * dashboard uses are shipped (latin subset via @fontsource). */
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("./fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("./fonts/jetbrains-mono-600.woff2") format("woff2");
+}
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("./fonts/jetbrains-mono-700.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url("./fonts/inter-400.woff2") format("woff2");
+}
+@font-face {
+    font-family: "Inter";
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url("./fonts/inter-600.woff2") format("woff2");
+}

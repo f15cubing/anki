@@ -1,48 +1,59 @@
 /* Copyright: Ankitects Pty Ltd and contributors
  * License: GNU AGPL, version 3 or later, http://www.gnu.org/licenses/agpl.html */
 
-/* GRE dashboard design tokens.
+/* GRE dashboard design tokens — the "Readout" identity.
  *
- * A small identity layered on top of Anki's theme: a calibrated instrument look
- * where uncertainty is the visual language. Every metric renders as a shaded
- * confidence band + point tick (see CalibrationStrip). Boldness is spent in one
- * place — the teal "signal" accent on the point estimate; everything else stays
- * quiet. Dark values track Anki's own `.night-mode` root class. */
+ * The page reads like a calibrated CAS / terminal printout: the monospaced data
+ * face is the hero (title, labels, and every figure), prose is a quiet body face,
+ * and every metric is a range in math notation that "shows its work" (a faint
+ * method tag). Uncertainty is the visual language — see CalibrationStrip. Boldness
+ * is spent in one place, the teal "signal" accent on the point estimate; the
+ * abstain/give-up state is a calm amber (never red). Dark values track Anki's own
+ * `.night-mode` root class. Fonts are bundled locally (see fonts.css) so the whole
+ * thing works offline. */
 
 :root {
-    --gre-ink: #16202a;
-    --gre-muted: #5b6b79;
-    --gre-surface: #fbfcfd;
-    --gre-surface-sunk: #f1f4f7;
-    --gre-hairline: #d3dce4;
-    --gre-signal: #0e7c86;
-    --gre-band: rgba(14, 124, 134, 0.16);
-    --gre-abstain: #b26b00;
-    --gre-abstain-weak: rgba(178, 107, 0, 0.1);
+    --gre-ink: #191a1a;
+    --gre-muted: #6a6a68;
+    --gre-faint: #9a9a97;
+    --gre-surface: #ffffff;
+    --gre-canvas: #fbfbfa;
+    --gre-surface-sunk: #f0f0ee;
+    --gre-hairline: #dededb;
+    --gre-signal: #0a7d78;
+    --gre-band: rgba(10, 125, 120, 0.15);
+    --gre-abstain: #9c6200;
+    --gre-abstain-weak: rgba(156, 98, 0, 0.09);
+    --gre-abstain-band: rgba(156, 98, 0, 0.13);
 
-    --gre-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo,
+    --gre-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
         Consolas, monospace;
-    --gre-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto,
-        sans-serif;
+    --gre-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+        Roboto, sans-serif;
 
     /* type scale (rem) */
-    --gre-fs-eyebrow: 0.72rem;
+    --gre-fs-eyebrow: 0.64rem;
+    --gre-fs-label: 0.62rem;
     --gre-fs-body: 0.92rem;
+    --gre-fs-figure: 1.15rem;
     --gre-fs-headline: 1.35rem;
-    --gre-fs-figure: 1.05rem;
+    --gre-fs-title: 1.9rem;
 
     --gre-radius: 10px;
     --gre-gap: 1rem;
 }
 
 .night-mode {
-    --gre-ink: #e7eef4;
-    --gre-muted: #93a4b3;
-    --gre-surface: #1b2530;
-    --gre-surface-sunk: #161e27;
-    --gre-hairline: #33414f;
-    --gre-signal: #2bb3c0;
-    --gre-band: rgba(43, 179, 192, 0.22);
-    --gre-abstain: #e0a44a;
-    --gre-abstain-weak: rgba(224, 164, 74, 0.14);
+    --gre-ink: #e6e7e9;
+    --gre-muted: #8b8f96;
+    --gre-faint: #61656d;
+    --gre-surface: #1b1e23;
+    --gre-canvas: #14161a;
+    --gre-surface-sunk: #191c21;
+    --gre-hairline: #2a2e35;
+    --gre-signal: #34c0b8;
+    --gre-band: rgba(52, 192, 184, 0.2);
+    --gre-abstain: #d59a3c;
+    --gre-abstain-weak: rgba(213, 154, 60, 0.12);
+    --gre-abstain-band: rgba(213, 154, 60, 0.18);
 }

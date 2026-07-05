@@ -24,6 +24,8 @@ draws an explicit dotted "not yet" rail instead of pretending to a position.
         compact?: boolean;
         label?: string;
         emptyLabel?: string;
+        /** faint right-aligned annotation, e.g. the estimator: "Wilson", "Platt". */
+        method?: string | null;
     }
 
     const {
@@ -38,11 +40,19 @@ draws an explicit dotted "not yet" rail instead of pretending to a position.
         compact = false,
         label = "",
         emptyLabel = "not studied yet",
+        method = null,
     }: Props = $props();
 
     const geo = $derived(stripGeometry(point, low, high, min, max));
     const fmt = (v: number | null | undefined): string =>
         v == null ? "—" : formatValue(v, scale);
+    // Bare bound (no unit) so the interval reads like CAS output: 60% ∈ [54, 66].
+    function fmtBound(v: number | null | undefined): string {
+        if (v == null) {
+            return "—";
+        }
+        return scale === "pct" ? `${Math.round(v * 100)}` : `${Math.round(v)}`;
+    }
 </script>
 
 <div class="strip {tone}" class:compact class:empty={geo.empty}>
@@ -70,9 +80,12 @@ draws an explicit dotted "not yet" rail instead of pretending to a position.
             <span class="muted">{emptyLabel}</span>
         {:else}
             <span class="point">{fmt(point)}</span>
-            <span class="ci">{fmt(low)}–{fmt(high)}</span>
+            <span class="ci">∈ [{fmtBound(low)}, {fmtBound(high)}]</span>
             {#if n != null}
                 <span class="n">n={n}</span>
+            {/if}
+            {#if method}
+                <span class="method">{method}</span>
             {/if}
         {/if}
     </div>
@@ -121,7 +134,13 @@ draws an explicit dotted "not yet" rail instead of pretending to a position.
         background: var(--gre-abstain);
     }
     .abstain .band {
-        background: var(--gre-abstain-weak);
+        background: var(--gre-abstain-band);
+    }
+    .method {
+        margin-left: auto;
+        color: var(--gre-faint);
+        font-size: 0.62rem;
+        letter-spacing: 0.04em;
     }
     .empty .track {
         background: repeating-linear-gradient(
