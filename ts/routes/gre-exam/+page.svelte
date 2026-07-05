@@ -12,6 +12,7 @@ server-side (the client never receives the keys during the exam).
 <script lang="ts">
     import { onDestroy, onMount } from "svelte";
 
+    import "../gre-dashboard/fonts.css";
     import "../gre-dashboard/tokens.css";
     import Countdown from "./Countdown.svelte";
     import ItemView from "./ItemView.svelte";
@@ -196,8 +197,9 @@ server-side (the client never receives the keys during the exam).
         {#if maxFeasible !== null}
             <p class="capacity-note">
                 The firewalled held-out bank can currently fill a blueprint-matched mock
-                of up to <strong>{maxFeasible}</strong> items — longer presets unlock as the
-                bank grows. Every mock keeps the official pace (~2.58 min/item).
+                of up to <strong>{maxFeasible}</strong>
+                 items — longer presets unlock as the bank grows. Every mock keeps the official
+                pace (~2.58 min/item).
             </p>
         {/if}
     {:else if phase === "loading"}

@@ -18,10 +18,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     .clock {
         font-family: var(--gre-mono);
         font-variant-numeric: tabular-nums;
-        font-size: 1.05rem;
-        font-weight: 600;
+        /* The one global clock is the exam's focal instrument — sized as the hero. */
+        font-size: 1.4rem;
+        font-weight: 700;
         color: var(--gre-ink);
-        letter-spacing: 0.02em;
+        letter-spacing: 0.01em;
     }
     .low {
         color: var(--gre-abstain);

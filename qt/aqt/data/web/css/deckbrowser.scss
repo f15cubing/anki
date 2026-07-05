@@ -5,153 +5,254 @@
 @use "../../../../../ts/lib/sass/card-counts";
 @use "../../../../../ts/lib/sass/elevation" as *;
 
-table {
-    padding: 1rem;
+// "Readout" identity (matches the GRE dashboard): the monospaced data face is the
+// hero. System mono stack — renders JetBrains Mono if the user has it, else a
+// high-quality system mono. (Bundling the exact woff2 into this Qt webview, like the
+// dashboard does, is a follow-up.)
+$display-font: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo,
+    Consolas, monospace;
 
-    .fancy & {
-        border: 1px solid var(--border-subtle);
-        border-radius: var(--border-radius-medium);
-
-        @include elevation(1, $opacity-boost: -0.08);
-        &:hover {
-            @include elevation(2);
-        }
-        background: var(--canvas-glass);
-    }
+body {
+    margin: 2em 1em 2.5em;
+    -webkit-user-select: none;
 }
 
-a.deck {
-    color: color(fg);
-    text-decoration: none;
-    min-width: 5em;
+// ---------------------------------------------------------------------------
+// Layout: a single centred column
+// ---------------------------------------------------------------------------
+.deck-browser {
     display: inline-block;
+    width: min(640px, 92vw);
+    text-align: start;
+    // Tabular figures so New / Learn / Due columns align like a spreadsheet.
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
 }
 
-a.deck:hover {
-    text-decoration: underline;
+// ---------------------------------------------------------------------------
+// Header — eyebrow + serif title over a faint graph-paper grid
+// ---------------------------------------------------------------------------
+.db-head {
+    position: relative;
+    padding: 0.5rem 0.35rem 1.2rem;
+    margin-bottom: 0.9rem;
+}
+
+.db-eyebrow {
+    font-family: $display-font;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-subtle);
+}
+
+.db-title {
+    font-family: $display-font;
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin-top: 0.2rem;
+    color: var(--fg);
+}
+
+// ---------------------------------------------------------------------------
+// Deck list — one elevated surface holding the tree
+// ---------------------------------------------------------------------------
+table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    padding: 0.35rem 0.55rem 0.55rem;
+    background: var(--canvas-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius-medium);
+    @include elevation(2, $opacity-boost: -0.06);
 }
 
 th {
-    border-bottom: 1px solid color(border-subtle);
-    padding-bottom: 5px;
-}
-
-tr.deck td {
-    padding: 1px 12px;
+    font-size: 0.64rem;
+    font-weight: 600;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--fg-subtle);
     border-bottom: 1px solid var(--border-subtle);
-
-    .fancy & {
-        border: unset;
-        padding: 4px 12px;
-    }
+    padding: 0.35rem 0.75rem 0.6rem;
+    text-align: start;
 }
 
-tr.top-level-drag-row td {
-    border-bottom: 1px solid transparent;
+th.count {
+    min-width: 4em;
+    text-align: end;
+}
+
+th.optscol {
+    width: 2.4em;
 }
 
 td {
     white-space: nowrap;
 }
 
-tr.drag-hover td {
-    border-bottom: 1px solid color(border);
+a.deck {
+    color: var(--fg);
+    text-decoration: none;
+    min-width: 5em;
+    font-weight: 500;
+    display: inline-block;
 }
 
-body {
-    margin: 2em 1em 1em 1em;
-    -webkit-user-select: none;
+a.deck:hover {
+    color: var(--fg-link);
+    text-decoration: none;
 }
 
-.current,
-tr:hover:not(.top-level-drag-row) {
-    td {
-        background: color(border-subtle);
-        &:first-child {
-            border-top-left-radius: prop(border-radius-medium);
-            border-bottom-left-radius: prop(border-radius-medium);
-        }
-        &:last-child {
-            border-top-right-radius: prop(border-radius-medium);
-            border-bottom-right-radius: prop(border-radius-medium);
-        }
-        .gears {
-            visibility: visible;
-        }
-    }
+tr.deck td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background var(--transition) ease;
 }
-[dir="rtl"] {
-    .current,
-    tr:hover:not(.top-level-drag-row) {
-        td {
-            background: color(canvas-inset);
-            &:first-child {
-                border-top-left-radius: 0;
-                border-bottom-left-radius: 0;
-                border-top-right-radius: prop(border-radius-medium);
-                border-bottom-right-radius: prop(border-radius-medium);
-            }
-            &:last-child {
-                border-top-right-radius: 0;
-                border-bottom-right-radius: 0;
-                border-top-left-radius: prop(border-radius-medium);
-                border-bottom-left-radius: prop(border-radius-medium);
-            }
-        }
-    }
+
+tr.top-level-drag-row td {
+    border-bottom: 1px solid transparent;
+    height: 2px;
+    padding: 0;
 }
 
 .decktd {
     min-width: 15em;
     max-width: calc(100vw - 300px);
     overflow: hidden;
+    text-align: start;
 }
 
-.count {
-    min-width: 4em;
-    text-align: right;
+// ---------------------------------------------------------------------------
+// Current deck + hover row: soft tint, rounded ends, accent bar on the left
+// ---------------------------------------------------------------------------
+.current td,
+tr.deck:hover:not(.top-level-drag-row) td {
+    background: var(--canvas-inset);
+    .gears {
+        visibility: visible;
+    }
 }
 
-.optscol {
-    width: 2em;
+.current td,
+tr.deck:hover:not(.top-level-drag-row) td {
+    &:first-child {
+        border-top-left-radius: var(--border-radius);
+        border-bottom-left-radius: var(--border-radius);
+    }
+    &:last-child {
+        border-top-right-radius: var(--border-radius);
+        border-bottom-right-radius: var(--border-radius);
+    }
 }
 
+.current td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent-card);
+}
+
+[dir="rtl"] {
+    .current td:first-child {
+        box-shadow: inset -3px 0 0 var(--accent-card);
+    }
+    .current td,
+    tr.deck:hover:not(.top-level-drag-row) td {
+        &:first-child {
+            border-radius: 0 var(--border-radius) var(--border-radius) 0;
+        }
+        &:last-child {
+            border-radius: var(--border-radius) 0 0 var(--border-radius);
+        }
+    }
+}
+
+tr.drag-hover td {
+    border-bottom: 1px solid var(--border);
+}
+
+// ---------------------------------------------------------------------------
+// Count chips — neutral pill, value coloured by card state; zero stays quiet
+// ---------------------------------------------------------------------------
+td .new-count,
+td .learn-count,
+td .review-count {
+    display: inline-block;
+    min-width: 2em;
+    padding: 0.1em 0.55em;
+    border-radius: var(--border-radius-large);
+    background: var(--canvas);
+    border: 1px solid var(--border-subtle);
+    font-weight: 600;
+    text-align: center;
+}
+
+td .zero-count {
+    display: inline-block;
+    min-width: 2em;
+    padding: 0.1em 0.55em;
+    color: var(--fg-faint);
+    text-align: center;
+}
+
+// ---------------------------------------------------------------------------
+// Tree affordances
+// ---------------------------------------------------------------------------
 .collapse {
-    color: color(fg);
+    color: var(--fg-subtle);
     text-decoration: none;
     display: inline-block;
-    width: 1em;
+    width: 1.2em;
+    text-align: center;
 }
 
 .filtered {
-    color: color(fg-link) !important;
+    color: var(--fg-link) !important;
 }
 
 .gears {
     width: 1em;
     height: 1em;
-    opacity: 0.5;
+    opacity: 0.55;
     padding-top: 0.2em;
     cursor: pointer;
     visibility: hidden;
 }
 
-.nightMode {
-    .gears {
-        filter: invert(180);
-    }
+.gears:hover {
+    opacity: 0.9;
 }
 
+.nightMode .gears {
+    filter: invert(180);
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler-upgrade callout
+// ---------------------------------------------------------------------------
 .callout {
-    background: color(border);
+    background: var(--canvas-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--border-radius-medium);
     padding: 1em;
-    margin: 1em;
+    margin: 1em auto;
+    width: min(640px, 92vw);
 
     div {
-        margin: 1em;
+        margin: 0.75em;
     }
 }
 
+// ---------------------------------------------------------------------------
+// Studied-today footer
+// ---------------------------------------------------------------------------
 #studiedToday {
-    margin: 2em 0;
+    margin: 1.3rem 0 0;
+    padding-top: 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--fg-subtle);
+    border-top: 1px solid var(--border-subtle);
 }

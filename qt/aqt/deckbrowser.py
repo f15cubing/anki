@@ -146,12 +146,16 @@ class DeckBrowser:
 
     _body = """
 <center>
-<table cellspacing=0 cellpadding=3>
+<div class="deck-browser">
+<header class="db-head">
+  <div class="db-eyebrow">GRE Math Subject Test</div>
+  <div class="db-title">Study decks</div>
+</header>
+<table class="deck-list" cellspacing=0 cellpadding=0>
 %(tree)s
 </table>
-
-<br>
 %(stats)s
+</div>
 </center>
 """
 
