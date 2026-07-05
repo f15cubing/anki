@@ -81,18 +81,40 @@ def reorder_output(col: Collection, output: QueuedCards) -> None:
     ``LEARNING`` cards keep their positions; only review slots are permuted, and
     each ``QueuedCard`` (card + states + context) moves as a self-contained unit,
     so the shown card is always paired with its own scheduling states.
+
+    The permutation is computed **purely** first (:func:`_interleaved_cards`, no
+    mutation); only a successfully-built, non-``None`` result is written back, and
+    any unexpected error falls back to the scheduler's original order — an
+    interleaving bug can never empty the queue or interrupt review.
     """
     if not interleave_enabled(col):
         return
+    try:
+        reordered = _interleaved_cards(col, output)
+    except Exception:
+        return  # never let the opt-in reorder interrupt the review loop
+    if reordered is None:
+        return  # a no-op case (small/homogeneous/untagged/already-interleaved)
+    del output.cards[:]
+    output.cards.extend(reordered)
+
+
+def _interleaved_cards(col: Collection, output: QueuedCards) -> list | None:
+    """Pure: return the reordered ``QueuedCard`` list, or ``None`` for a no-op.
+
+    Does not mutate ``output`` — it snapshots each ``QueuedCard`` into a standalone
+    message and returns them in the interleaved order, so the caller's write-back
+    is the only mutation and happens only after this fully succeeds.
+    """
     n = len(output.cards)
     if n < _MIN_REVIEW:
-        return
+        return None
 
     review_positions = [
         i for i in range(n) if output.cards[i].queue == QueuedCards.REVIEW
     ]
     if len(review_positions) < _MIN_REVIEW:
-        return
+        return None
 
     # (position, leaf) for each review card, in FSRS priority order. Positions
     # double as stable ids for interleave_order.
@@ -100,12 +122,12 @@ def reorder_output(col: Collection, output: QueuedCards) -> None:
     for i in review_positions:
         leaf = _leaf_tag(col, output.cards[i].card.note_id)
         if leaf is None:
-            return  # incomplete tagging → bail out, don't guess
+            return None  # incomplete tagging → bail out, don't guess
         pairs.append((i, leaf))
 
     ordered_positions = [pos for pos, _leaf in interleave_order(pairs)]
     if ordered_positions == review_positions:
-        return  # already interleaved / nothing to do
+        return None  # already interleaved / nothing to do
 
     # Final index order: review slots filled by the interleaved order, everything
     # else untouched.
@@ -113,13 +135,11 @@ def reorder_output(col: Collection, output: QueuedCards) -> None:
     for slot, src in zip(review_positions, ordered_positions):
         final[slot] = src
 
-    # Snapshot each QueuedCard into a standalone message, then rewrite the repeated
-    # field in the new order (avoids aliasing the parent-owned messages).
+    # Snapshot each QueuedCard into a standalone message (avoids aliasing the
+    # parent-owned messages), then return them in the new order.
     snapshot = []
     for card in output.cards:
         copy = type(card)()
         copy.CopyFrom(card)
         snapshot.append(copy)
-    del output.cards[:]
-    for idx in final:
-        output.cards.add().CopyFrom(snapshot[idx])
+    return [snapshot[idx] for idx in final]

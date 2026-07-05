@@ -47,6 +47,12 @@ class _StubCol:
         return _StubNote(self._tags_by_nid[note_id])
 
 
+# A distinctive per-card marker stamped into each QueuedCard's *context* sub-message
+# (context.seed = _SEED_BASE + note_id). Lets a test prove the whole QueuedCard —
+# card + states + context — moves as a self-contained unit through the reorder.
+_SEED_BASE = 900000
+
+
 def _mk_output(cards):
     """cards: list of (queue, note_id[, leaf]) → a QueuedCards proto batch."""
     out = QueuedCards()
@@ -56,6 +62,9 @@ def _mk_output(cards):
         qc.queue = queue
         qc.card.id = 1000 + i
         qc.card.note_id = nid
+        qc.context.seed = (
+            _SEED_BASE + nid
+        )  # travels with the card iff units stay intact
     return out
 
 
@@ -134,6 +143,23 @@ def test_multiset_invariant():
     before = sorted(_order(out))
     reorder_output(col, out)
     assert sorted(_order(out)) == before  # nothing added / dropped / duplicated
+
+
+def test_states_and_context_travel_with_card():
+    # The load-bearing safety invariant: each QueuedCard (card + states + context)
+    # must move as a self-contained unit, so the shown card is paired with its own
+    # scheduling data. We stamp context.seed = _SEED_BASE + note_id and assert it
+    # still holds for every card after the reorder actually permutes the batch.
+    tags = _tags(
+        (1, CALC_A), (2, CALC_A), (3, CALC_A), (4, CALC_B), (5, CALC_B), (6, CALC_B)
+    )
+    col = _StubCol(enabled=True, tags_by_nid=tags)
+    out = _mk_output([(QueuedCards.REVIEW, n) for n in (1, 2, 3, 4, 5, 6)])
+    before = _order(out)
+    reorder_output(col, out)
+    assert _order(out) != before  # the reorder really happened
+    for qc in out.cards:
+        assert qc.context.seed == _SEED_BASE + qc.card.note_id
 
 
 def test_new_and_learning_keep_their_positions():
