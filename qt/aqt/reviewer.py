@@ -264,9 +264,16 @@ class Reviewer:
 
     def _get_next_v3_card(self) -> None:
         assert isinstance(self.mw.col.sched, V3Scheduler)
-        output = self.mw.col.sched.get_queued_cards()
+        # GRE: optional confusable-type interleaving of the review queue (PRD §8,
+        # D5). Off by default → fetch_limit 1 and no reorder, i.e. upstream
+        # behaviour. When on, fetch a small lookahead window and re-order only the
+        # review cards in memory (pure presentation; no scheduling/undo change).
+        from aqt.gre.interleave_review import fetch_limit, reorder_output
+
+        output = self.mw.col.sched.get_queued_cards(fetch_limit=fetch_limit(self.mw.col))
         if not output.cards:
             return
+        reorder_output(self.mw.col, output)
         self._v3 = V3CardInfo.from_queue(output)
         self.card = Card(self.mw.col, backend_card=self._v3.top_card().card)
         self.card.start_timer()

@@ -125,6 +125,15 @@ def _add_gre_method_menu() -> None:
 gui_hooks.main_window_did_init.append(_add_gre_method_menu)
 
 
+def _add_gre_interleave_menu() -> None:
+    from aqt.gre_interleave import setup_gre_interleave_menu
+
+    setup_gre_interleave_menu(aqt.mw)
+
+
+gui_hooks.main_window_did_init.append(_add_gre_interleave_menu)
+
+
 def _autoimport_gre_deck(_col: object) -> None:
     from aqt.gre.deck_autoimport import maybe_import_gre_deck
 
