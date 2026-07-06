@@ -269,5 +269,5 @@ def maybe_import_gre_deck(mw: object) -> None:
     QueryOp(
         parent=mw,  # type: ignore[arg-type]
         op=lambda col: _run_if_needed(col),
-        success=lambda _ran: mw.reset(),  # type: ignore[union-attr]
+        success=lambda _ran: mw.reset(),  # type: ignore[attr-defined]
     ).run_in_background()

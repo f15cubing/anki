@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from anki.notes import NoteId
 from anki.scheduler.v3 import QueuedCards
 from aqt.gre.interleave import interleave_order
 
@@ -63,7 +64,7 @@ def fetch_limit(col: Collection) -> int:
 def _leaf_tag(col: Collection, note_id: int) -> str | None:
     """The card's ``topic::…`` leaf tag, or None if unavailable."""
     try:
-        tags = col.get_note(note_id).tags
+        tags = col.get_note(NoteId(note_id)).tags
     except Exception:
         return None
     for tag in tags:
