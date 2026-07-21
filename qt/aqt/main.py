@@ -104,16 +104,10 @@ def _add_gre_home_menu() -> None:
     setup_gre_home_menu(aqt.mw)
 
 
-gui_hooks.main_window_did_init.append(_add_gre_home_menu)
-
-
 def _add_gre_dashboard_menu() -> None:
     from aqt.gre_dashboard import setup_gre_dashboard_menu
 
     setup_gre_dashboard_menu(aqt.mw)
-
-
-gui_hooks.main_window_did_init.append(_add_gre_dashboard_menu)
 
 
 def _add_gre_exam_menu() -> None:
@@ -122,16 +116,10 @@ def _add_gre_exam_menu() -> None:
     setup_gre_exam_menu(aqt.mw)
 
 
-gui_hooks.main_window_did_init.append(_add_gre_exam_menu)
-
-
 def _add_gre_method_menu() -> None:
     from aqt.gre_method import setup_gre_method_menu
 
     setup_gre_method_menu(aqt.mw)
-
-
-gui_hooks.main_window_did_init.append(_add_gre_method_menu)
 
 
 def _add_gre_interleave_menu() -> None:
@@ -140,16 +128,28 @@ def _add_gre_interleave_menu() -> None:
     setup_gre_interleave_menu(aqt.mw)
 
 
-gui_hooks.main_window_did_init.append(_add_gre_interleave_menu)
-
-
 def _autoimport_gre_deck(_col: object) -> None:
     from aqt.gre.deck_autoimport import maybe_import_gre_deck
 
     maybe_import_gre_deck(aqt.mw)
 
 
-gui_hooks.collection_did_load.append(_autoimport_gre_deck)
+def _install_gre_hooks() -> None:
+    # Registered from inside a function (not at module scope) on purpose: aqt.main
+    # and the generated _aqt.hooks module form an import cycle, and referencing the
+    # gui_hooks hook objects at module scope trips a mypy cyclic-import "has-type"
+    # false positive. Function bodies are checked after all module-level types are
+    # resolved, so the same references type cleanly here. Runtime behaviour is
+    # identical: this runs once at import, before main_window_did_init fires.
+    gui_hooks.main_window_did_init.append(_add_gre_home_menu)
+    gui_hooks.main_window_did_init.append(_add_gre_dashboard_menu)
+    gui_hooks.main_window_did_init.append(_add_gre_exam_menu)
+    gui_hooks.main_window_did_init.append(_add_gre_method_menu)
+    gui_hooks.main_window_did_init.append(_add_gre_interleave_menu)
+    gui_hooks.collection_did_load.append(_autoimport_gre_deck)
+
+
+_install_gre_hooks()
 
 MainWindowState = Literal[
     "startup", "deckBrowser", "overview", "review", "resetRequired", "profileManager"

@@ -14,6 +14,7 @@ server-side (the client never receives the keys during the exam).
 
     import "../gre-dashboard/fonts.css";
     import "../gre-dashboard/tokens.css";
+    import GreHomeLink from "../gre-dashboard/GreHomeLink.svelte";
     import Countdown from "./Countdown.svelte";
     import ItemView from "./ItemView.svelte";
     import Navigator from "./Navigator.svelte";
@@ -177,6 +178,7 @@ server-side (the client never receives the keys during the exam).
 <div class="exam">
     {#if phase === "setup"}
         <header class="masthead">
+            <GreHomeLink />
             <span class="eyebrow">GRE · Mathematics Subject Test</span>
             <h1>Exam Mode</h1>
         </header>
@@ -254,6 +256,7 @@ server-side (the client never receives the keys during the exam).
             Back
         </button>
     {:else if phase === "results"}
+        <GreHomeLink />
         <Results {result} />
         <button type="button" class="ghost" onclick={() => (phase = "setup")}>
             New mock

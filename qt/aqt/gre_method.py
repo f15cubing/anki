@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import aqt
 import aqt.main
+from aqt.gre.nav import install_gre_home_bridge
 from aqt.qt import (
     QAction,
     QDialog,
@@ -29,6 +30,7 @@ class GreMethod(QDialog):
         self.name = "greMethod"
         disable_help_button(self)
         self.web = AnkiWebView(kind=AnkiWebViewKind.GRE_METHOD)
+        install_gre_home_bridge(self.web, mw, self)
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.web)

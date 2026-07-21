@@ -37,5 +37,15 @@ def test_endpoint_returns_view_model_and_is_read_only(monkeypatch):
     out = m.gre_dashboard_data()
     vm = json.loads(out.decode("utf-8"))
     assert calls["mastery"] == 1
-    assert set(vm.keys()) == {"generated_at", "memory", "coverage", "readiness", "performance"}
+    # build_view_model also feeds GRE Home, so it emits ``stats`` + ``study_next``
+    # alongside the three separated scores; the dashboard page ignores the extras.
+    assert set(vm.keys()) == {
+        "generated_at",
+        "memory",
+        "coverage",
+        "readiness",
+        "performance",
+        "stats",
+        "study_next",
+    }
     assert len(vm["coverage"]["leaves"]) == 17

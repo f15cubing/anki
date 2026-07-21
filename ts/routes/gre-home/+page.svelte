@@ -396,14 +396,14 @@ range or an honest "not available".
     .fig-num {
         font-family: var(--gre-mono);
         font-variant-numeric: tabular-nums;
-        font-size: 1.7rem;
+        font-size: 2.6rem;
         font-weight: 700;
         color: var(--gre-ink);
         line-height: 1;
     }
     .fig-den {
         color: var(--gre-muted);
-        font-size: 1.1rem;
+        font-size: 1.6rem;
         font-weight: 400;
     }
     .fig-lab {
