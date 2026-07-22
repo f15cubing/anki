@@ -398,6 +398,7 @@ def is_sveltekit_page(path: str) -> bool:
         "image-occlusion",
         "gre-dashboard",
         "gre-exam",
+        "gre-method",
     ]
 
 
@@ -676,8 +677,11 @@ def save_custom_colours() -> bytes:
 
 def gre_dashboard_data() -> bytes:
     # Read-only: calls the W1 MasteryQuery read RPC and returns a computed
-    # view-model as JSON. No mutation, no OpChanges (see dashboard_data).
+    # view-model as JSON. No mutation, no OpChanges (see dashboard_data). Also
+    # reads (never writes) the Exam Mode attempts side-file to surface observed
+    # Performance; best-effort so a missing/unreadable file never breaks load.
     import json
+    import os
     from datetime import datetime, timezone
 
     from aqt.gre import dashboard_data as dd
@@ -685,8 +689,16 @@ def gre_dashboard_data() -> bytes:
     topics = dd.query_topics()
     rows = aqt.mw.col.mastery_query(topics)
     rows_by_tag = {r.topic: r for r in rows}
+    attempts: list = []
+    try:
+        folder = aqt.mw.pm.profileFolder()
+        attempts = dd.load_exam_attempts(os.path.join(folder, "gre_exam_results.jsonl"))
+    except Exception:
+        attempts = []
     vm = dd.build_view_model(
-        rows_by_tag, generated_at=datetime.now(timezone.utc).isoformat()
+        rows_by_tag,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        exam_attempts=attempts,
     )
     return json.dumps(vm).encode("utf-8")
 
@@ -851,6 +863,19 @@ def gre_exam_submit() -> bytes:
     return json.dumps(result).encode()
 
 
+def gre_method_interleave() -> bytes:
+    # Read-only: runs the vendored FSRS-cooperative interleaving algorithm on a fixed
+    # example queue for the "how this differs from FSRS" explainer page. Pure — it never
+    # touches the collection (no col access, no OpChanges); k/w are clamped downstream.
+    import json
+
+    from aqt.gre import method_data
+
+    body = request.get_json(silent=True, force=True) or {}
+    demo = method_data.build_interleave_demo(k=body.get("k"), w=body.get("w"))
+    return json.dumps(demo).encode("utf-8")
+
+
 post_handler_list = [
     congrats_info,
     get_deck_configs_for_update,
@@ -871,6 +896,7 @@ post_handler_list = [
     gre_exam_capacity,
     gre_exam_form,
     gre_exam_submit,
+    gre_method_interleave,
 ]
 
 

@@ -1,5 +1,6 @@
 # Copyright: Ankitects Pty Ltd and contributors
 # License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+import json
 from dataclasses import dataclass as _dc
 
 import pytest
@@ -44,11 +45,13 @@ def test_headline_none_when_no_reviews():
 
 
 def test_headline_reweights_when_a_bucket_has_no_reviews():
-    out = dd.headline([
-        {"weight": 0.50, "point": 0.8, "reviewed": 10},
-        {"weight": 0.25, "point": 0.6, "reviewed": 5},
-        {"weight": 0.25, "point": 0.0, "reviewed": 0},  # excluded + renormalized
-    ])
+    out = dd.headline(
+        [
+            {"weight": 0.50, "point": 0.8, "reviewed": 10},
+            {"weight": 0.25, "point": 0.6, "reviewed": 5},
+            {"weight": 0.25, "point": 0.0, "reviewed": 0},  # excluded + renormalized
+        ]
+    )
     assert out["point"] == pytest.approx(0.7333, abs=0.001)
     assert out["buckets_reflected"] == 2
     assert out["buckets_total"] == 3
@@ -80,32 +83,156 @@ def test_empty_collection_suppresses_headline_and_gates_readiness():
 
 
 def test_coverage_counts_deck_and_studied():
-    vm = dd.build_view_model(_rows(**{
-        "topic::calculus::integral_single": FakeRow(total_cards=5, reviewed_count=3, mastered_count=2, avg_recall=0.7),
-        "topic::algebra::linear": FakeRow(total_cards=4, reviewed_count=0, mastered_count=0),
-    }), generated_at="t")
+    vm = dd.build_view_model(
+        _rows(
+            **{
+                "topic::calculus::integral_single": FakeRow(
+                    total_cards=5, reviewed_count=3, mastered_count=2, avg_recall=0.7
+                ),
+                "topic::algebra::linear": FakeRow(
+                    total_cards=4, reviewed_count=0, mastered_count=0
+                ),
+            }
+        ),
+        generated_at="t",
+    )
     assert vm["coverage"]["deck_pct"] == pytest.approx(2 / 17)
     assert vm["coverage"]["studied_pct"] == pytest.approx(1 / 17)
 
 
 def test_next_best_topic_prefers_highest_weight_uncovered_leaf():
     # nothing studied -> highest-weight bucket (calculus) first leaf, taxonomy order
-    assert dd.next_best_topic(_rows(), dd.load_taxonomy()) == "topic::calculus::differential_single"
+    assert (
+        dd.next_best_topic(_rows(), dd.load_taxonomy())
+        == "topic::calculus::differential_single"
+    )
 
 
 def test_next_best_topic_all_studied_returns_lowest_memory_lower_bound():
     # every leaf studied -> no uncovered leaf; fall through to lowest Wilson lower-bound
     tax = dd.load_taxonomy()
-    rows = {t: FakeRow(total_cards=10, reviewed_count=10, mastered_count=9) for t in dd.query_topics()}
+    rows = {
+        t: FakeRow(total_cards=10, reviewed_count=10, mastered_count=9)
+        for t in dd.query_topics()
+    }
     weakest = "topic::algebra::linear"
     rows[weakest] = FakeRow(total_cards=10, reviewed_count=10, mastered_count=1)
     assert dd.next_best_topic(rows, tax) == weakest
 
 
 def test_headline_uses_bucket_rows_rolled_up_by_rpc():
-    vm = dd.build_view_model(_rows(**{
-        "topic::calculus": FakeRow(total_cards=100, reviewed_count=10, mastered_count=8, avg_recall=0.82),
-        "topic::algebra": FakeRow(total_cards=40, reviewed_count=5, mastered_count=3, avg_recall=0.6),
-    }), generated_at="t")
+    vm = dd.build_view_model(
+        _rows(
+            **{
+                "topic::calculus": FakeRow(
+                    total_cards=100,
+                    reviewed_count=10,
+                    mastered_count=8,
+                    avg_recall=0.82,
+                ),
+                "topic::algebra": FakeRow(
+                    total_cards=40, reviewed_count=5, mastered_count=3, avg_recall=0.6
+                ),
+            }
+        ),
+        generated_at="t",
+    )
     assert vm["memory"]["headline"]["point"] == pytest.approx(0.7333, abs=0.001)
     assert vm["memory"]["headline"]["buckets_reflected"] == 2
+
+
+# --- observed Performance (from Exam Mode attempts) --------------------------
+
+
+def test_observed_performance_no_attempts_is_not_available_never_zero():
+    out = dd.observed_performance([])
+    assert out["state"] == "not_available"
+    # honesty ceiling: no fabricated point when there is no evidence
+    assert "point" not in out
+    assert "GRE exam mode" in out["note"]
+
+
+def test_observed_performance_pools_attempts_into_a_wilson_range():
+    attempts = [
+        {"correct": True},
+        {"correct": True},
+        {"correct": False},
+        {"correct": True},
+    ]
+    out = dd.observed_performance(attempts)
+    assert out["state"] == "observed"
+    assert (out["correct"], out["total"]) == (3, 4)
+    assert out["point"] == pytest.approx(0.75)
+    # always a range, clamped to the unit interval, bracketing the point
+    assert 0.0 <= out["low"] <= out["point"] <= out["high"] <= 1.0
+
+
+def test_observed_performance_ignores_malformed_entries():
+    out = dd.observed_performance(
+        [{"correct": True}, {"nope": 1}, "x", None, {"correct": False}]
+    )
+    assert (out["correct"], out["total"]) == (1, 2)
+
+
+def test_build_view_model_surfaces_observed_performance_when_attempts_present():
+    vm = dd.build_view_model(
+        _rows(),
+        generated_at="t",
+        exam_attempts=[{"correct": True}, {"correct": False}],
+    )
+    assert vm["performance"]["state"] == "observed"
+    assert vm["performance"]["total"] == 2
+    assert 0.0 <= vm["performance"]["low"] <= vm["performance"]["high"] <= 1.0
+
+
+def test_build_view_model_without_attempts_keeps_performance_not_available():
+    vm = dd.build_view_model(_rows(), generated_at="t")
+    assert vm["performance"]["state"] == "not_available"
+
+
+def test_load_exam_attempts_flattens_all_sessions(tmp_path):
+    p = tmp_path / "gre_exam_results.jsonl"
+    p.write_text(
+        json.dumps({"ts": 1, "attempts": [{"item_id": "a", "correct": True}]})
+        + "\n"
+        + json.dumps(
+            {
+                "ts": 2,
+                "attempts": [
+                    {"item_id": "b", "correct": False},
+                    {"item_id": "c", "correct": True},
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    out = dd.load_exam_attempts(str(p))
+    assert len(out) == 3
+    assert sum(1 for a in out if a["correct"]) == 2
+
+
+def test_load_exam_attempts_missing_file_is_empty(tmp_path):
+    assert dd.load_exam_attempts(str(tmp_path / "nope.jsonl")) == []
+
+
+def test_load_exam_attempts_skips_malformed_lines(tmp_path):
+    p = tmp_path / "r.jsonl"
+    p.write_text(
+        "not json\n" + json.dumps({"attempts": [{"correct": True}]}) + "\n" + "\n",
+        encoding="utf-8",
+    )
+    assert len(dd.load_exam_attempts(str(p))) == 1
+
+
+def test_load_then_observe_end_to_end(tmp_path):
+    p = tmp_path / "gre_exam_results.jsonl"
+    p.write_text(
+        json.dumps(
+            {"attempts": [{"correct": True}, {"correct": True}, {"correct": False}]}
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    out = dd.observed_performance(dd.load_exam_attempts(str(p)))
+    assert (out["state"], out["correct"], out["total"]) == ("observed", 2, 3)
